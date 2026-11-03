@@ -1,0 +1,81 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "geoai-land-cover"
+version = "0.1.0"
+description = "GeoAI-based land cover classification and change detection system using Sentinel-2 imagery and ESA WorldCover labels."
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+authors = [{ name = "Ashish Thakur" }]
+keywords = ["geoai", "gis", "remote-sensing", "land-cover", "sentinel-2", "random-forest"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: GIS",
+]
+dependencies = [
+    "affine>=2.4",
+    "folium>=0.15,<1.0",
+    "geopandas>=0.14,<2.0",
+    "joblib>=1.3,<2.0",
+    "matplotlib>=3.8,<4.0",
+    "numpy>=1.26,<3.0",
+    "pandas>=2.1,<3.0",
+    "pillow>=10.0",
+    "plotly>=5.20,<7.0",
+    "pyogrio>=0.7",
+    "pyproj>=3.6,<4.0",
+    "python-dotenv>=1.0,<2.0",
+    "rasterio>=1.3.10,<2.0",
+    "scikit-learn>=1.4,<2.0",
+    "scipy>=1.11,<2.0",
+    "seaborn>=0.13,<1.0",
+    "shapely>=2.0,<3.0",
+    "streamlit>=1.33,<2.0",
+    "streamlit-folium>=0.20",
+    "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.5",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*", "config*", "dashboard*"]
+
+[tool.setuptools.package-data]
+"*" = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra --strict-markers"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src", "config", "dashboard", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "C4", "SIM"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src", "config", "dashboard"]
+
+[tool.coverage.run]
+source = ["src", "config"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+]

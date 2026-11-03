@@ -1,0 +1,61 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+
+# Geospatial data and generated artefacts (keep directory placeholders)
+data/**/*
+!data/**/
+!data/**/.gitkeep
+!data/**/README.md
+
+# Models and outputs
+*.joblib
+*.pkl
+*.tif
+*.tiff
+*.geojson
+*.gpkg
+*.shp
+*.shx
+*.dbf
+*.prj
+
+# Logs
+logs/*
+!logs/.gitkeep
+
+# Testing and linting caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Notebooks
+.ipynb_checkpoints/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Streamlit
+.streamlit/secrets.toml

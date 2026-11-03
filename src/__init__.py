@@ -1,0 +1,3 @@
+"""GeoAI land cover classification and change detection package."""
+
+__version__ = "0.1.0"
