@@ -26,7 +26,7 @@ error remains unresolved.
 - Streamlit starts headlessly and the health endpoint returns `ok`.
 - No data, models, or secrets are committed.
 
-## Phase 2 — GIS fundamentals and data processing
+## Phase 2 — GIS fundamentals and data processing (complete)
 
 **Tasks**
 
@@ -45,7 +45,27 @@ error remains unresolved.
 - Clipped output retains the correct CRS, transform, and dimensions.
 - Tests cover valid and invalid inputs.
 
-## Phase 3 — Spectral feature extraction
+**Delivered modules**
+
+- `src/data/data_metadata.py`
+- `src/data/raster_loader.py`
+- `src/data/vector_loader.py`
+- `src/data/dataset_validator.py`
+- `src/preprocessing/raster_clipping.py`
+- `src/visualization/raster_visualizer.py`
+- `tests/fixtures.py` plus five Phase 2 test modules
+
+**Verified behaviour**
+
+- 40×40 synthetic GeoTIFF clipped to a 100 m × 100 m AOI yields a 10×10
+  output with the expected transform and EPSG:32633 CRS.
+- Source NoData is preserved; sources without NoData produce an internal mask.
+- Invalid bowtie geometries are repaired with `shapely.make_valid`.
+- WGS84 AOIs are reprojected to the raster CRS; non-overlapping AOIs are
+  rejected.
+- Geodesic area of a synthetic 1 km × 1 km polygon is approximately 1 km².
+
+## Phase 3 — Spectral feature extraction (complete)
 
 **Tasks**
 
@@ -62,7 +82,33 @@ error remains unresolved.
 - NDBI is enabled only when SWIR is available.
 - Division by zero and NoData produce masked values, not infinities.
 
-## Phase 4 — Training dataset preparation
+**Delivered modules**
+
+- `config/sentinel2_bands.py`
+- `src/preprocessing/raster_alignment.py`
+- `src/preprocessing/image_stacking.py`
+- `src/features/spectral_indices.py`
+- `src/features/feature_extraction.py`
+- `src/visualization/index_visualizer.py`
+- `tests/test_sentinel2_bands.py` plus five Phase 3 test modules
+
+**Verified behaviour**
+
+- Band keys and aliases resolve consistently; unsupported bands and filename
+  codes are rejected or ignored rather than guessed.
+- Same-grid alignment preserves values; cross-resolution and geographic-to-
+  projected alignment produce the target CRS, transform, dimensions, and
+  `float32` output.
+- Source NoData becomes `NaN` and propagates into the shared feature mask.
+- Multispectral stacks reject mismatched grids and preserve band order and
+  descriptions on export.
+- NDVI/NDWI always compute from core bands; NDBI appears only when B11 exists.
+- Zero denominators and non-finite inputs are masked; no infinities are
+  produced.
+- The feature stack exposes only finite valid pixels to modelling and rejects
+  missing core bands or duplicate aliases.
+
+## Phase 4 — Training dataset preparation (next)
 
 **Tasks**
 
@@ -176,7 +222,9 @@ error remains unresolved.
 .venv/bin/python -m streamlit run app.py --server.headless true
 ```
 
-## Phase 1 verification record
+## Verification record
+
+### Phase 1
 
 - Python 3.11.16 (uv-managed)
 - 69 packages installed, including Rasterio 1.4.4 (GDAL 3.10.3), GeoPandas
@@ -185,3 +233,31 @@ error remains unresolved.
 - Ruff: all checks passed
 - `compileall`: OK
 - Streamlit health endpoint: `ok`
+
+### Phase 2
+
+- 111 total tests passed (52 new Phase 2 tests)
+- Synthetic GeoTIFF fixtures cover multi-band data, NoData, missing CRS, and
+  corrupt files
+- Synthetic GeoJSON/Shapefile fixtures cover CRS reprojection and geometry
+  repair
+- Raster clipping verified for CRS, transform, dimensions, band descriptions,
+  NoData, internal masks, and georeferenced GeoTIFF output
+- Raster previews verified for band, RGB, PNG export, and invalid bands
+- Ruff: all checks passed
+- `compileall`: OK
+
+### Phase 3
+
+- 185 total tests passed (74 new Phase 3 tests)
+- Overall coverage: 94% statement/branch coverage
+- Synthetic fixtures cover same-grid alignment, 20 m → 10 m resampling,
+  geographic → projected reprojection, NoData propagation, mismatched grids,
+  zero-denominator indices, NDBI availability, feature ordering, sample-matrix
+  validity, and index visualisation
+- Verified NDVI/NDWI stay in `[-1, 1]` for valid pixels and masked values never
+  become infinities
+- Verified exported aligned rasters and feature stacks preserve CRS, transform,
+  dimensions, `float32` dtype, band descriptions, and `NaN` NoData
+- Ruff: all checks passed
+- `compileall`: OK

@@ -5,10 +5,13 @@ Level-2A land cover and comparing classifications from different dates. The
 initial reference labels come from ESA WorldCover 2021 and the initial model is
 a Random Forest classifier.
 
-> **Status: Phase 1 (project setup) complete.** The repository currently provides
-> the environment, configuration, class registry, logging, utilities, tests, and
-> documentation. Raster processing, model training, classification, change
-> detection, and the full dashboard are implemented in later phases.
+> **Status: Phase 3 (spectral feature extraction) complete.** The repository
+> provides environment setup, configuration, logging, raster/vector loading with
+> metadata and CRS handling, geometry validation/repair, reprojection, AOI
+> clipping with NoData preservation, raster previews, band alignment and
+> resampling, multispectral stacking, NDVI/NDWI/optional NDBI, and a model-ready
+> feature stack. Model training, classification, change detection, and the full
+> dashboard are implemented in later phases.
 
 ## Objectives
 
@@ -38,18 +41,19 @@ geoai-land-cover/
 ├── app.py                     # Streamlit entry point (Phase 1 placeholder)
 ├── config/
 │   ├── settings.py            # Environment-driven application settings
-│   └── land_cover_classes.py  # ESA WorldCover class registry
+│   ├── land_cover_classes.py  # ESA WorldCover class registry
+│   └── sentinel2_bands.py     # Sentinel-2 band metadata and alias resolution
 ├── data/                      # Local data and artefacts (not committed)
 ├── dashboard/                 # Dashboard pages (Phase 8)
 ├── docs/                      # Requirements, architecture, data, user guide
 ├── src/
-│   ├── data/                  # Raster/vector loading and validation (Phase 2)
-│   ├── preprocessing/         # Alignment, masking, clipping (Phase 2–3)
-│   ├── features/              # Band stacking and spectral indices (Phase 3)
+│   ├── data/                  # Raster/vector loading, metadata, CRS validation
+│   ├── preprocessing/         # AOI clipping, band alignment, image stacking
+│   ├── features/              # Spectral indices and model feature extraction
 │   ├── training/              # Sampling, splitting, RF training (Phase 4–5)
 │   ├── classification/        # Windowed prediction (Phase 6)
 │   ├── analysis/              # Area statistics and change detection (Phase 6–7)
-│   ├── visualization/         # Maps and charts (Phase 8)
+│   ├── visualization/         # Band/RGB and spectral-index previews
 │   ├── reports/               # Report generation (Phase 8)
 │   └── utils/                 # Errors, logging, file and validation helpers
 └── tests/                     # Unit tests (synthetic fixtures only)
@@ -109,6 +113,67 @@ make run       # streamlit run app.py
 
 The app serves at <http://localhost:8501> by default.
 
+### Example GIS pipeline (Phase 2)
+
+```python
+from src.data.raster_loader import read_band, read_metadata
+from src.data.vector_loader import geodesic_area_km2, load_aoi
+from src.preprocessing.raster_clipping import clip_raster_to_aoi
+from src.visualization.raster_visualizer import save_band_preview
+
+metadata = read_metadata("data/raw/sentinel2/scene.tif")
+print(metadata.to_dict())
+
+aoi = load_aoi("data/raw/aoi/study.geojson", target_crs=metadata.crs)
+print(f"AOI area: {geodesic_area_km2(aoi):.2f} km²")
+
+result = clip_raster_to_aoi(
+    "data/raw/sentinel2/scene.tif",
+    aoi,
+    "data/processed/imagery/scene_clipped.tif",
+)
+print(f"Clipped grid: {result.width}x{result.height}, CRS={result.crs}")
+print(f"Valid pixels: {result.valid_pixel_count}/{result.total_pixel_count}")
+
+save_band_preview(
+    "data/processed/imagery/scene_clipped.tif",
+    "data/outputs/reports/scene_band1.png",
+)
+```
+
+Replace the paths with real local files. No sample imagery is bundled.
+
+### Example spectral feature pipeline (Phase 3)
+
+```python
+from src.features.feature_extraction import build_feature_stack, save_feature_stack
+from src.features.spectral_indices import compute_spectral_indices
+from src.preprocessing.raster_alignment import align_bands
+from src.visualization.index_visualizer import save_index_preview
+
+band_paths = {
+    "B02": "data/raw/sentinel2/B02.tif",
+    "B03": "data/raw/sentinel2/B03.tif",
+    "B04": "data/raw/sentinel2/B04.tif",
+    "B08": "data/raw/sentinel2/B08.tif",
+}
+
+# Align every band to B04's 10 m grid (the core bands are natively 10 m).
+aligned = align_bands(band_paths, reference_band="B04", resampling="bilinear")
+
+features = build_feature_stack(aligned)
+save_feature_stack(features, "data/processed/features/scene_features.tif")
+
+indices = compute_spectral_indices({key: raster.data for key, raster in aligned.items()})
+save_index_preview(indices["NDVI"], "data/outputs/reports/ndvi.png", name="NDVI")
+
+print(f"Features: {features.feature_names}")
+print(f"Valid pixels: {features.valid_pixel_count}/{features.total_pixel_count}")
+```
+
+Add B11 (and optionally B12) to `band_paths` to include SWIR features and NDBI.
+The example intentionally omits them to show the 10 m core configuration.
+
 ## Data
 
 No satellite imagery, reference rasters, or trained models are committed to this
@@ -139,9 +204,9 @@ Unit tests use synthetic arrays and fixtures and do not require downloads.
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | Project setup, environment, configuration, logging, tests, docs | Complete |
-| 2 | GIS fundamentals: raster/vector loading, CRS, clipping, NoData | Next |
-| 3 | Band alignment, multispectral stack, NDVI/NDWI/NDBI | Planned |
-| 4 | WorldCover label alignment and spatial sampling | Planned |
+| 2 | GIS fundamentals: raster/vector loading, CRS, clipping, NoData | Complete |
+| 3 | Band alignment, multispectral stack, NDVI/NDWI/NDBI | Complete |
+| 4 | WorldCover label alignment and spatial sampling | Next |
 | 5 | Random Forest training and evaluation | Planned |
 | 6 | Windowed classification, GeoTIFF output, area statistics | Planned |
 | 7 | Change detection and transition matrices | Planned |

@@ -58,6 +58,9 @@ include = ["src*", "config*", "dashboard*"]
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-ra --strict-markers"
+filterwarnings = [
+    "ignore::PendingDeprecationWarning:rasterio.*",
+]
 
 [tool.ruff]
 target-version = "py311"
