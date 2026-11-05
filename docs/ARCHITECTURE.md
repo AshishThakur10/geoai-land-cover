@@ -83,10 +83,16 @@ All outputs preserve CRS, transform, width, height, and NoData semantics.
 - `dataset_split.py` — **implemented Phase 4.** Assigns whole spatial blocks to
   train or validation with a seeded shuffle and writes a JSON manifest with
   block IDs, configuration, class distributions, and disjointness checks.
-- `random_forest.py` — configured Random Forest classifier (Phase 5).
-- `evaluation.py` — overall accuracy, precision, recall, F1, per-class metrics,
-  confusion matrix, feature importance (Phase 5).
-- `model_manager.py` — save/load model plus reproducibility metadata (Phase 5).
+- `random_forest.py` — **implemented Phase 5.** Validates configuration,
+  builds a seeded scikit-learn Random Forest, trains on a `LabeledSamples`
+  object, rejects fewer than two samples/classes, and exposes predictions plus
+  training provenance.
+- `evaluation.py` — **implemented Phase 5.** Held-out accuracy, balanced
+  accuracy, macro/weighted precision/recall/F1, per-class support and metrics,
+  confusion matrix, feature importance, and JSON report persistence.
+- `model_manager.py` — **implemented Phase 5.** Saves the fitted model with a
+  `.joblib` file and JSON metadata sidecar; loads both and validates the format,
+  estimator type, feature count/order, and class contract.
 - `predictor.py` — windowed/chunked prediction writing a georeferenced raster
   (Phase 6).
 
@@ -167,7 +173,8 @@ AOI upload
   -> spatial train/validation split
   -> Random Forest training
   -> evaluation reports and feature importance
-  -> windowed classification -> georeferenced GeoTIFF
+  -> model + reproducibility metadata persistence
+  -> model reload and windowed classification -> georeferenced GeoTIFF
   -> area statistics -> change detection -> dashboard/exports
 ```
 
@@ -230,6 +237,33 @@ AOI upload
 - WorldCover remains a reference label source with label noise and temporal
   mismatch risks; split manifests do not turn it into ground truth.
 
+### Phase 5 model rules
+
+- Models are fitted only on `split.train`; `split.validation` is reserved for
+  held-out evaluation. Training accuracy is never reported as validation
+  accuracy.
+- Random Forest configuration comes from `RandomForestConfig.from_settings()`
+  or explicit values. The seed is recorded with the model; tests verify that the
+  same seed and samples reproduce the same predictions.
+- `use_balanced_weights` is explicit rather than implicit. When enabled, model
+  metadata records the choice so class weighting is reproducible.
+- Evaluation derives its label set from the union of observed and predicted
+  valid WorldCover codes. An explicit label list may include absent classes,
+  whose support is reported as zero. Division by zero yields zero metrics rather
+  than `NaN` or an exception.
+- Metrics are calculated from actual prediction arrays. No fallback, synthetic,
+  or hard-coded accuracy values are used.
+- Feature importances are emitted only when their count matches the feature
+  names and all values are finite.
+- A saved model consists of a `.joblib` model plus a `.metadata.json` sidecar.
+  The sidecar records format version, creation timestamp, model checksum, feature
+  order, classes, parameters, seed, training counts and label source, optional
+  input paths/dates/AOI, evaluation metrics, and software versions.
+- `load_model()` treats the metadata as a contract: an unsupported format,
+  non-Random-Forest estimator, feature mismatch, or class mismatch is rejected.
+  Joblib loading is restricted to trusted files because deserialisation can
+  execute arbitrary code.
+
 ## 5. Key decisions and trade-offs
 
 | Decision | Rationale |
@@ -244,6 +278,9 @@ AOI upload
 | Nearest-only label resampling | Prevents invalid class codes from interpolation |
 | Block-based spatial split | Prevents pixel leakage without expensive geometry buffering |
 | Balanced sample weights + class distribution metadata | Makes imbalance explicit and reproducible |
+| Train/evaluate on separate spatial splits | Avoids presenting training performance as validation evidence |
+| Joblib model + JSON metadata sidecar | Keeps the binary artifact small while making provenance human-readable |
+| Feature/class contract checks on load | Prevents silently predicting with mismatched inputs or labels |
 | Synthetic test fixtures | Tests run quickly without downloading large datasets |
 | No data or results in Git | Large artefacts and fabricated results are explicitly avoided |
 
@@ -272,6 +309,11 @@ AOI upload
 - Phase 4 covers WorldCover label alignment, NoData/unknown-class exclusion,
   class distributions and imbalance metadata, balanced sample weights, block-
   based disjoint splits, reproducibility, and JSON manifest serialisation.
-- Later phases extend the same fixture approach to training, prediction, area
+- Phase 5 covers configuration validation, seeded Random Forest training,
+  deterministic prediction, insufficient sample/class failures, known-value
+  metric calculations, absent classes, confusion matrices, feature importance,
+  held-out evaluation, save/load prediction identity, metadata contents, and
+  corrupted or mismatched artifact rejection.
+- Later phases extend the same fixture approach to windowed prediction, area
   statistics, and change detection.
 - Git ignores data, models, logs, and generated outputs.

@@ -5,15 +5,17 @@ Level-2A land cover and comparing classifications from different dates. The
 initial reference labels come from ESA WorldCover 2021 and the initial model is
 a Random Forest classifier.
 
-> **Status: Phase 4 (training dataset preparation) complete.** The repository
+> **Status: Phase 5 (machine-learning development) complete.** The repository
 > provides environment setup, configuration, logging, raster/vector loading with
 > metadata and CRS handling, geometry validation/repair, reprojection, AOI
 > clipping with NoData preservation, raster previews, band alignment and
 > resampling, multispectral stacking, NDVI/NDWI/optional NDBI, a model-ready
 > feature stack, WorldCover label alignment, audited valid-pixel sampling,
-> class-distribution reporting, balanced sample weights, and spatially separated
-> train/validation blocks with JSON manifests. Model training, classification,
-> change detection, and the full dashboard are implemented in later phases.
+> class-distribution reporting, balanced sample weights, spatially separated
+> train/validation blocks with JSON manifests, configurable Random Forest
+> training, held-out evaluation, feature importance, and model persistence with
+> reproducibility metadata. Classification, change detection, and the full
+> dashboard are implemented in later phases.
 
 ## Objectives
 
@@ -52,7 +54,7 @@ geoai-land-cover/
 │   ├── data/                  # Raster/vector loading, metadata, CRS validation
 │   ├── preprocessing/         # AOI clipping, band alignment, image stacking
 │   ├── features/              # Spectral indices and model feature extraction
-│   ├── training/              # Label sampling, spatial splits, RF training
+│   ├── training/              # Sampling, splits, RF training/evaluation, models
 │   ├── classification/        # Windowed prediction (Phase 6)
 │   ├── analysis/              # Area statistics and change detection (Phase 6–7)
 │   ├── visualization/         # Band/RGB and spectral-index previews
@@ -207,6 +209,44 @@ NoData (`0`), non-finite aligned labels, unknown codes, and pixels with any
 invalid feature are excluded and counted. The split manifest records the block
 IDs, seed, fraction, sample counts, and per-class distributions.
 
+### Example Random Forest training and persistence (Phase 5)
+
+```python
+from config.settings import get_settings
+from src.training.evaluation import evaluate_random_forest, save_evaluation_report
+from src.training.model_manager import ModelRunMetadata, load_model, save_model
+from src.training.random_forest import RandomForestConfig, train_random_forest
+
+config = RandomForestConfig.from_settings(get_settings())
+trained = train_random_forest(split.train, config)
+
+metrics = evaluate_random_forest(trained, split.validation)
+save_evaluation_report(metrics, "data/outputs/reports/evaluation.json")
+print(metrics.to_dict())  # real held-out metrics, not fabricated values
+
+artifacts = save_model(
+    trained,
+    "data/models/random_forest.joblib",
+    run_metadata=ModelRunMetadata(
+        input_paths=tuple(band_paths.values()),
+        image_dates=("2021-07-01",),
+        aoi_path="data/raw/aoi/study.geojson",
+        label_path="data/raw/worldcover/ESA_WorldCover_10m_2021_v200.tif",
+        study_area="Example study area",
+    ),
+    evaluation=metrics,
+)
+print(artifacts.metadata_path)
+
+reloaded = load_model(artifacts.model_path)
+assert (reloaded.predict(split.validation.X) == trained.predict(split.validation.X)).all()
+```
+
+Model metadata records feature names/order, class codes, hyperparameters, seed,
+training counts and label source, optional input paths/dates/AOI, held-out
+metrics, and software versions. Only load `.joblib` files from trusted sources:
+joblib deserialisation can execute code.
+
 ## Data
 
 No satellite imagery, reference rasters, or trained models are committed to this
@@ -240,8 +280,8 @@ Unit tests use synthetic arrays and fixtures and do not require downloads.
 | 2 | GIS fundamentals: raster/vector loading, CRS, clipping, NoData | Complete |
 | 3 | Band alignment, multispectral stack, NDVI/NDWI/NDBI | Complete |
 | 4 | WorldCover label alignment and spatial sampling | Complete |
-| 5 | Random Forest training and evaluation | Next |
-| 6 | Windowed classification, GeoTIFF output, area statistics | Planned |
+| 5 | Random Forest training, evaluation, model persistence | Complete |
+| 6 | Windowed classification, GeoTIFF output, area statistics | Next |
 | 7 | Change detection and transition matrices | Planned |
 | 8 | Interactive Streamlit dashboard and exports | Planned |
 | 9 | Expanded testing, documentation, screenshots | Planned |

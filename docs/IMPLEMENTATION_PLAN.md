@@ -148,7 +148,7 @@ error remains unresolved.
 - Split configuration, block IDs, class distributions, and disjointness are
   serialised to a reproducible JSON manifest.
 
-## Phase 5 — Machine-learning development (next)
+## Phase 5 — Machine-learning development (complete)
 
 **Tasks**
 
@@ -166,7 +166,35 @@ error remains unresolved.
 - No fabricated or hard-coded metrics.
 - Tests use synthetic data and small forests.
 
-## Phase 6 — Land-cover classification
+**Delivered modules**
+
+- `src/training/random_forest.py`
+- `src/training/evaluation.py`
+- `src/training/model_manager.py`
+- `tests/test_random_forest.py`
+- `tests/test_evaluation.py`
+- `tests/test_model_manager.py`
+- `synthetic_ml_samples()` fixture in `tests/fixtures.py`
+
+**Verified behaviour**
+
+- Random Forest configuration rejects invalid tree counts, depths, leaf sizes,
+  feature strategies, class weights, seeds, and worker counts.
+- The same seed and synthetic samples reproduce the same predictions.
+- Training rejects fewer than two samples or fewer than two classes and records
+  feature names/order, class codes, counts, parameters, and label source.
+- Known synthetic predictions produce the expected accuracy, balanced accuracy,
+  macro/weighted metrics, confusion matrix, per-class support, and feature
+  importance; absent classes are reported with zero support.
+- Held-out validation is evaluated separately from training data using small
+  synthetic forests.
+- Saving and reloading reproduces predictions and preserves feature order,
+  classes, parameters, seed, run metadata, metrics, checksum, and versions.
+- Corrupt files, unsupported paths, metadata-format mismatches, non-Random-
+  Forest estimators, and feature/class contract violations are rejected.
+- Evaluation reports and model metadata serialise to valid JSON.
+
+## Phase 6 — Land-cover classification (next)
 
 **Tasks**
 
@@ -300,5 +328,25 @@ error remains unresolved.
   under the same seed, and cover every sample exactly once
 - Verified JSON manifests record split configuration, block IDs, class
   distributions, and the disjointness check
+- Ruff: all checks passed
+- `compileall`: OK
+
+### Phase 5
+
+- 238 total tests passed (37 new Phase 5 tests)
+- Overall coverage: 93% statement/branch coverage
+- Synthetic ML fixture covers four land-cover classes and six features across
+  200 samples
+- Verified seeded training reproducibility, balanced-weight mode, and explicit
+  failures for insufficient samples/classes and invalid prediction inputs
+- Verified accuracy, balanced accuracy, macro/weighted precision/recall/F1,
+  per-class support, confusion matrix, absent classes, and feature importance
+  against known synthetic predictions
+- Verified held-out evaluation uses validation samples, not training samples
+- Verified `.joblib` save/load prediction identity and JSON metadata containing
+  feature order, classes, parameters, seed, training counts, run provenance,
+  metrics, model checksum, and software versions
+- Verified rejection of unsupported suffixes, missing/corrupt files, metadata
+  format mismatches, non-Random-Forest estimators, and feature/class mismatches
 - Ruff: all checks passed
 - `compileall`: OK

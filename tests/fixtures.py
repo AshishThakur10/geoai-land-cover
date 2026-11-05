@@ -8,15 +8,19 @@ they are never presented as real satellite observations or model results.
 from __future__ import annotations
 
 from pathlib import Path
+from types import MappingProxyType
 
 import geopandas as gpd
 import numpy as np
 import rasterio
 from affine import Affine
 from pyproj import Transformer
+from rasterio.crs import CRS
 from rasterio.transform import from_origin
 from shapely import Polygon, box
 from shapely import transform as shapely_transform
+
+from src.training.sample_generator import LabeledSamples
 
 RASTER_CRS = "EPSG:32633"
 RASTER_MINX = 500_000.0
@@ -197,3 +201,50 @@ def write_synthetic_worldcover(
         dataset.set_band_description(1, "Synthetic WorldCover labels")
 
     return path
+
+
+def synthetic_ml_samples(
+    n_per_class: int = 50,
+    *,
+    seed: int = 42,
+) -> LabeledSamples:
+    """Return deterministic, clearly synthetic labeled samples for ML tests."""
+    codes = (10, 30, 40, 80)
+    centers = np.array(
+        [
+            [0.10, 0.85, 0.20, 0.90, 0.75, 0.80],
+            [0.30, 0.55, 0.35, 0.50, 0.35, 0.50],
+            [0.50, 0.40, 0.65, 0.30, 0.20, 0.40],
+            [0.85, 0.15, 0.90, 0.10, 0.10, 0.15],
+        ],
+        dtype=np.float32,
+    )
+    rng = np.random.default_rng(seed)
+    features = np.vstack(
+        [
+            center + rng.normal(0.0, 0.06, size=(n_per_class, center.size))
+            for center in centers
+        ]
+    ).astype(np.float32)
+    y = np.repeat(np.asarray(codes, dtype=np.int16), n_per_class)
+    rows = np.repeat(np.arange(len(codes), dtype=np.int64), n_per_class)
+    cols = np.tile(np.arange(n_per_class, dtype=np.int64), len(codes))
+    width = n_per_class
+    height = len(codes)
+
+    return LabeledSamples(
+        X=features,
+        y=y,
+        rows=rows,
+        cols=cols,
+        feature_names=("B02", "B03", "B04", "B08", "NDVI", "NDWI"),
+        transform=Affine.identity(),
+        crs=CRS.from_epsg(4326),
+        width=width,
+        height=height,
+        label_source=Path("synthetic_labels.tif"),
+        total_pixels=width * height,
+        ignored_feature_pixels=0,
+        ignored_nodata_labels=0,
+        unknown_label_counts=MappingProxyType({}),
+    )

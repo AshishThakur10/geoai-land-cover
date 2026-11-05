@@ -2,16 +2,18 @@
 
 ## Current status
 
-Phase 4 (training dataset preparation) is complete. The project can load
+Phase 5 (machine-learning development) is complete. The project can load
 GeoTIFFs and GeoJSON/Shapefile boundaries, inspect metadata and CRS values,
 repair invalid geometries, reproject AOIs, clip rasters with preserved
 georeferencing and NoData, align and resample Sentinel-2 bands to a shared grid,
 build a multispectral stack, compute NDVI/NDWI/optional NDBI, export a
 model-ready feature stack, align ESA WorldCover labels, exclude and audit
-invalid pixels, report class distributions and balanced weights, and create
-spatially separated train/validation blocks with JSON manifests. Model
-training, classification, change detection, and the full dashboard are not
-implemented yet.
+invalid pixels, report class distributions and balanced weights, create
+spatially separated train/validation blocks with JSON manifests, train a
+configurable Random Forest, evaluate it on held-out samples, inspect feature
+importance, and save/load the model with reproducibility metadata. Windowed
+classification, change detection, and the full dashboard are not implemented
+yet.
 
 ## 1. Requirements
 
@@ -250,6 +252,69 @@ WorldCover is a reference label source, not unquestioned ground truth. Label
 noise and class/temporal mismatch remain limitations of any metrics derived
 from it.
 
+### Model training, evaluation, and persistence
+
+```python
+from config.settings import get_settings
+from src.training.evaluation import evaluate_random_forest, save_evaluation_report
+from src.training.model_manager import ModelRunMetadata, load_model, save_model
+from src.training.random_forest import RandomForestConfig, train_random_forest
+
+# 1. Train only on the training split. Other RF parameters use safe defaults;
+#    tree count, depth, class weight, and seed come from GEOAI_* settings.
+config = RandomForestConfig.from_settings(get_settings())
+trained = train_random_forest(split.train, config)
+print(trained.to_dict())
+
+# 2. Evaluate on the held-out spatial validation split.
+metrics = evaluate_random_forest(trained, split.validation)
+print(metrics.accuracy, metrics.balanced_accuracy)
+print(metrics.confusion_matrix)
+for item in metrics.feature_importances:
+    print(item.name, item.importance)
+
+# 3. Save the real report and the model plus metadata.
+save_evaluation_report(metrics, "data/outputs/reports/evaluation.json")
+artifacts = save_model(
+    trained,
+    "data/models/random_forest.joblib",
+    run_metadata=ModelRunMetadata(
+        input_paths=tuple(band_paths.values()),
+        image_dates=("2021-07-01",),
+        aoi_path="data/raw/aoi/study.geojson",
+        label_path="data/raw/worldcover/ESA_WorldCover_10m_2021_v200.tif",
+        study_area="Example study area",
+        notes="Example run; replace with actual provenance",
+    ),
+    evaluation=metrics,
+)
+print(artifacts.metadata_path)
+
+# 4. Reload and verify prediction identity before reuse.
+loaded = load_model(artifacts.model_path)
+reloaded_predictions = loaded.predict(split.validation.X)
+assert (reloaded_predictions == trained.predict(split.validation.X)).all()
+```
+
+Rules:
+
+- Train on `split.train` and evaluate on `split.validation`. Do not report
+  training-set accuracy as validation performance.
+- Metrics come from actual predictions. There are no fallback or invented
+  scores.
+- `use_balanced_weights=True` is optional and recorded in metadata. The Random
+  Forest `class_weight` setting is independent and also recorded.
+- Feature names and order in `split.train` and `split.validation` must match;
+  prediction and evaluation reject mismatches.
+- The `.joblib` file is the fitted estimator. The adjacent
+  `.metadata.json` file records format version, checksum, features, classes,
+  parameters, seed, training counts and label source, optional run provenance,
+  metrics, and software versions.
+- Only load `.joblib` files from trusted sources. Joblib deserialisation can
+  execute arbitrary code.
+- A model trained on synthetic test data is not evidence of real-world
+  land-cover accuracy. Report metrics only for the actual data and split used.
+
 ## 6. Testing and quality checks
 
 ```bash
@@ -312,9 +377,10 @@ Check the log output for Python tracebacks. Run:
 
 - No dashboard functionality beyond the Phase 1 landing page.
 - No AOI, imagery, or reference data bundled.
-- No trained models or classification results yet.
-- Alignment, stacking, sampling, and splitting are in-memory; windowed
-  processing is introduced with classification in Phase 6.
+- No pre-trained models or classification results are bundled. Models you train
+  are local artifacts and are ignored by Git.
+- Alignment, stacking, sampling, splitting, training, and evaluation are
+  in-memory; windowed processing is introduced with classification in Phase 6.
 - Cloud masking is not implemented until SCL/QA input is explicitly supported.
 - Block splitting prevents pixel overlap but does not add a geographic buffer
   between adjacent blocks.
