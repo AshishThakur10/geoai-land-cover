@@ -2,7 +2,7 @@
 
 ## Current status
 
-Phase 5 (machine-learning development) is complete. The project can load
+Phase 6 (land-cover classification) is complete. The project can load
 GeoTIFFs and GeoJSON/Shapefile boundaries, inspect metadata and CRS values,
 repair invalid geometries, reproject AOIs, clip rasters with preserved
 georeferencing and NoData, align and resample Sentinel-2 bands to a shared grid,
@@ -11,9 +11,10 @@ model-ready feature stack, align ESA WorldCover labels, exclude and audit
 invalid pixels, report class distributions and balanced weights, create
 spatially separated train/validation blocks with JSON manifests, train a
 configurable Random Forest, evaluate it on held-out samples, inspect feature
-importance, and save/load the model with reproducibility metadata. Windowed
-classification, change detection, and the full dashboard are not implemented
-yet.
+importance, save/load the model with reproducibility metadata, classify feature
+rasters in windows, write georeferenced land-cover GeoTIFFs with legends, and
+calculate projected or geodesic class areas with CSV export. Change detection
+and the full dashboard are not implemented yet.
 
 ## 1. Requirements
 
@@ -315,6 +316,67 @@ Rules:
 - A model trained on synthetic test data is not evidence of real-world
   land-cover accuracy. Report metrics only for the actual data and split used.
 
+### Classification and area statistics
+
+```python
+from src.analysis.area_statistics import (
+    compute_area_statistics,
+    save_area_statistics_csv,
+)
+from src.classification.predictor import (
+    classify_feature_raster,
+    classify_feature_stack,
+)
+
+# 1. Classify a saved feature GeoTIFF in windows.
+classification = classify_feature_raster(
+    loaded,
+    "data/processed/features/scene_features.tif",
+    "data/outputs/classifications/land_cover.tif",
+    window_size=512,
+)
+print(classification.to_dict())
+
+# Alternatively, classify an existing in-memory FeatureStack.
+classification = classify_feature_stack(
+    loaded,
+    features,
+    "data/outputs/classifications/land_cover_in_memory.tif",
+    window_size=512,
+)
+
+# 2. Calculate per-class counts, areas, and percentages.
+statistics = compute_area_statistics(classification.output_path, window_size=1024)
+for item in statistics.classes:
+    print(item.code, item.name, item.pixel_count, item.area_km2, item.percentage)
+
+# 3. Export the table as CSV.
+save_area_statistics_csv(
+    statistics,
+    "data/outputs/statistics/land_cover_area.csv",
+)
+```
+
+Rules:
+
+- Use the same feature names and order used for training. Band descriptions in
+  the feature GeoTIFF are checked; pass `feature_names=` explicitly when the
+  raster has missing or non-matching descriptions.
+- `window_size` controls memory use, not output resolution. Classification reads
+  and writes each window while preserving the full CRS, transform, width, and
+  height.
+- Any invalid feature pixel becomes NoData (`0` by default). NoData must not
+  overlap a valid land-cover class code.
+- Output class maps use `uint8` ESA WorldCover codes plus NoData. They include a
+  class legend tag and palette, so GIS software can display class names/colours.
+- Area statistics use projected pixel dimensions when the CRS is projected. For
+  geographic CRSs, WGS84 geodesic cell areas replace degrees-as-metres. Rotated
+  geographic grids must be reprojected to a projected CRS first.
+- Percentages use valid classified pixels as the denominator; NoData is excluded.
+- Classification maps are model predictions, not verified ground truth. Area
+  totals describe the map produced by the model, not confirmed real-world land
+  cover.
+
 ## 6. Testing and quality checks
 
 ```bash
@@ -377,10 +439,11 @@ Check the log output for Python tracebacks. Run:
 
 - No dashboard functionality beyond the Phase 1 landing page.
 - No AOI, imagery, or reference data bundled.
-- No pre-trained models or classification results are bundled. Models you train
-  are local artifacts and are ignored by Git.
-- Alignment, stacking, sampling, splitting, training, and evaluation are
-  in-memory; windowed processing is introduced with classification in Phase 6.
+- No pre-trained models or classification results are bundled. Models and
+  classification outputs you create are local artifacts and are ignored by Git.
+- Alignment, stacking, sampling, splitting, training, evaluation, and feature
+  construction are in-memory; classification and area statistics can process
+  rasters in windows, but the upstream feature cube must still fit in memory.
 - Cloud masking is not implemented until SCL/QA input is explicitly supported.
 - Block splitting prevents pixel overlap but does not add a geographic buffer
   between adjacent blocks.

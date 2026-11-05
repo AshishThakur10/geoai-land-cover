@@ -93,14 +93,18 @@ All outputs preserve CRS, transform, width, height, and NoData semantics.
 - `model_manager.py` — **implemented Phase 5.** Saves the fitted model with a
   `.joblib` file and JSON metadata sidecar; loads both and validates the format,
   estimator type, feature count/order, and class contract.
-- `predictor.py` — windowed/chunked prediction writing a georeferenced raster
-  (Phase 6).
+- `predictor.py` — **implemented Phase 6.** Classifies an in-memory
+  `FeatureStack` or reads a feature GeoTIFF in windows, writes a `uint8`
+  georeferenced class raster with defined NoData, class legend tags, palette,
+  and per-class pixel counts.
 
 ### Layer 4 — Analysis (`src/analysis/`)
 
-- `area_statistics.py` — pixel counts, projected/geodesic areas, percentages.
-- `change_detection.py` — align two classifications and identify transitions.
-- `transition_matrix.py` — class-to-class area matrix and summaries.
+- `area_statistics.py` — **implemented Phase 6.** Windowed per-class pixel
+  counts, percentages, projected or WGS84 geodesic areas, and CSV export.
+- `change_detection.py` — align two classifications and identify transitions
+  (Phase 7).
+- `transition_matrix.py` — class-to-class area matrix and summaries (Phase 7).
 
 ### Layer 5 — Visualization (`src/visualization/`, `src/reports/`)
 
@@ -175,7 +179,8 @@ AOI upload
   -> evaluation reports and feature importance
   -> model + reproducibility metadata persistence
   -> model reload and windowed classification -> georeferenced GeoTIFF
-  -> area statistics -> change detection -> dashboard/exports
+  -> per-class pixel counts/areas -> statistics CSV
+  -> change detection -> dashboard/exports
 ```
 
 ### Phase 2 geospatial rules
@@ -264,6 +269,34 @@ AOI upload
   Joblib loading is restricted to trusted files because deserialisation can
   execute arbitrary code.
 
+### Phase 6 classification and area rules
+
+- Classification accepts either a fitted `TrainedRandomForest` or a persisted
+  `LoadedModel`; both must use the exact feature names and order seen in
+  training. Raster band descriptions provide the feature order, or the caller
+  must supply `feature_names` explicitly.
+- Feature rasters are read and classified in square windows. The in-memory
+  `FeatureStack` path applies the same windowing logic. Memory use is bounded by
+  the window size and feature count rather than total raster size.
+- A pixel is classified only when every feature is finite after masked/NoData
+  handling. Invalid pixels become the configured NoData code. NoData must be an
+  integer in `[0, 255]` and must not overlap a recognised class code.
+- Output is a single-band `uint8` GeoTIFF with the source CRS, transform, width,
+  and height unchanged. Only model classes and NoData may occur. The dataset
+  carries an ESA WorldCover legend tag, a palette, and a class-code description.
+- Predictions returned by the estimator are checked against the model's declared
+  classes before writing; unexpected codes fail rather than enter the map.
+- Area statistics require an integer classification band. Unknown class codes
+  are reported as an error, not silently dropped.
+- For projected CRSs, pixel area comes from the absolute transform determinant
+  multiplied by the CRS linear-unit conversion factor. For geographic CRSs,
+  WGS84 geodesic cell areas are computed row by row; raw degrees are never
+  treated as metres.
+- Rotated geographic grids are rejected because the row-wise geodesic
+  simplification would be inaccurate. Reproject them to a projected CRS first.
+- Percentages use valid classified pixels as the denominator; NoData is excluded.
+  CSV output uses the same counts/areas as the in-memory result.
+
 ## 5. Key decisions and trade-offs
 
 | Decision | Rationale |
@@ -281,12 +314,16 @@ AOI upload
 | Train/evaluate on separate spatial splits | Avoids presenting training performance as validation evidence |
 | Joblib model + JSON metadata sidecar | Keeps the binary artifact small while making provenance human-readable |
 | Feature/class contract checks on load | Prevents silently predicting with mismatched inputs or labels |
+| Windowed classification reads/writes | Bounds memory use for large imagery |
+| `uint8` class raster with NoData `0` | Compact, directly usable in GIS with an explicit invalid value |
+| Geodesic fallback for geographic rasters | Reports meaningful areas without treating degrees as metres |
 | Synthetic test fixtures | Tests run quickly without downloading large datasets |
 | No data or results in Git | Large artefacts and fabricated results are explicitly avoided |
 
 ## 6. Non-functional requirements mapping
 
-- **Performance:** windowed raster processing in Phase 6; cached settings.
+- **Performance:** windowed feature reading, classification, and statistics;
+  cached settings.
 - **Reliability:** validation helpers, typed errors, rotating logs.
 - **Code quality:** modular packages, type hints, Ruff, focused tests.
 - **Reproducibility:** fixed seed in settings; model metadata in Phase 5;
@@ -314,6 +351,10 @@ AOI upload
   metric calculations, absent classes, confusion matrices, feature importance,
   held-out evaluation, save/load prediction identity, metadata contents, and
   corrupted or mismatched artifact rejection.
-- Later phases extend the same fixture approach to windowed prediction, area
-  statistics, and change detection.
+- Phase 6 covers in-memory and raster-window classification, NoData propagation,
+  feature/class contract failures, deterministic class maps, grid/CRS/transform
+  preservation, legend tags and palette, projected pixel-area calculations,
+  geographic geodesic areas, unknown-code rejection, CSV export, and invalid
+  area-input failures.
+- Later phases extend the same fixture approach to change detection.
 - Git ignores data, models, logs, and generated outputs.

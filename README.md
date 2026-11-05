@@ -5,7 +5,7 @@ Level-2A land cover and comparing classifications from different dates. The
 initial reference labels come from ESA WorldCover 2021 and the initial model is
 a Random Forest classifier.
 
-> **Status: Phase 5 (machine-learning development) complete.** The repository
+> **Status: Phase 6 (land-cover classification) complete.** The repository
 > provides environment setup, configuration, logging, raster/vector loading with
 > metadata and CRS handling, geometry validation/repair, reprojection, AOI
 > clipping with NoData preservation, raster previews, band alignment and
@@ -13,9 +13,10 @@ a Random Forest classifier.
 > feature stack, WorldCover label alignment, audited valid-pixel sampling,
 > class-distribution reporting, balanced sample weights, spatially separated
 > train/validation blocks with JSON manifests, configurable Random Forest
-> training, held-out evaluation, feature importance, and model persistence with
-> reproducibility metadata. Classification, change detection, and the full
-> dashboard are implemented in later phases.
+> training, held-out evaluation, feature importance, model persistence with
+> reproducibility metadata, windowed classification to georeferenced GeoTIFF,
+> class legends, and projected/geodesic area statistics with CSV export. Change
+> detection and the full dashboard are implemented in later phases.
 
 ## Objectives
 
@@ -55,8 +56,8 @@ geoai-land-cover/
 │   ├── preprocessing/         # AOI clipping, band alignment, image stacking
 │   ├── features/              # Spectral indices and model feature extraction
 │   ├── training/              # Sampling, splits, RF training/evaluation, models
-│   ├── classification/        # Windowed prediction (Phase 6)
-│   ├── analysis/              # Area statistics and change detection (Phase 6–7)
+│   ├── classification/        # Windowed prediction and classification rasters
+│   ├── analysis/              # Area statistics; change detection follows
 │   ├── visualization/         # Band/RGB and spectral-index previews
 │   ├── reports/               # Report generation (Phase 8)
 │   └── utils/                 # Errors, logging, file and validation helpers
@@ -247,6 +248,41 @@ training counts and label source, optional input paths/dates/AOI, held-out
 metrics, and software versions. Only load `.joblib` files from trusted sources:
 joblib deserialisation can execute code.
 
+### Example windowed classification and area statistics (Phase 6)
+
+```python
+from src.analysis.area_statistics import (
+    compute_area_statistics,
+    save_area_statistics_csv,
+)
+from src.classification.predictor import classify_feature_raster
+
+classification = classify_feature_raster(
+    loaded,
+    "data/processed/features/scene_features.tif",
+    "data/outputs/classifications/land_cover.tif",
+    window_size=512,
+)
+print(classification.to_dict())
+
+statistics = compute_area_statistics(classification.output_path)
+print(statistics.to_dict())
+save_area_statistics_csv(
+    statistics,
+    "data/outputs/statistics/land_cover_area.csv",
+)
+```
+
+The classification GeoTIFF preserves the feature grid's CRS, transform, width,
+and height. Pixels with any invalid feature become the defined NoData code
+(`0`), and only valid ESA WorldCover codes appear elsewhere. The dataset includes
+a class legend tag and palette. Area statistics use projected pixel dimensions
+when possible and WGS84 geodesic cell areas for geographic rasters; longitude and
+latitude degrees are never treated as metres.
+
+Classification maps are model outputs, not verified ground truth. Internal
+validation metrics and area totals do not establish real-world accuracy.
+
 ## Data
 
 No satellite imagery, reference rasters, or trained models are committed to this
@@ -266,7 +302,8 @@ Unit tests use synthetic arrays and fixtures and do not require downloads.
   and coverage. Do not pair 2021 labels with unrelated recent imagery and claim
   that the labels are current.
 - Random pixel-level train/validation splits leak information because nearby
-  pixels are spatially correlated. Later phases use spatially separated splits.
+  pixels are spatially correlated. This project uses spatially separated blocks,
+  but adjacent blocks can still be nearby.
 - A difference between two classifications is not proof of real environmental
   change; it may reflect seasonality, clouds, acquisition differences, or model
   error.
@@ -281,8 +318,8 @@ Unit tests use synthetic arrays and fixtures and do not require downloads.
 | 3 | Band alignment, multispectral stack, NDVI/NDWI/NDBI | Complete |
 | 4 | WorldCover label alignment and spatial sampling | Complete |
 | 5 | Random Forest training, evaluation, model persistence | Complete |
-| 6 | Windowed classification, GeoTIFF output, area statistics | Next |
-| 7 | Change detection and transition matrices | Planned |
+| 6 | Windowed classification, GeoTIFF output, area statistics | Complete |
+| 7 | Change detection and transition matrices | Next |
 | 8 | Interactive Streamlit dashboard and exports | Planned |
 | 9 | Expanded testing, documentation, screenshots | Planned |
 

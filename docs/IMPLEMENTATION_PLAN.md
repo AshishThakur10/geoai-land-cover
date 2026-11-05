@@ -194,7 +194,7 @@ error remains unresolved.
   Forest estimators, and feature/class contract violations are rejected.
 - Evaluation reports and model metadata serialise to valid JSON.
 
-## Phase 6 — Land-cover classification (next)
+## Phase 6 — Land-cover classification (complete)
 
 **Tasks**
 
@@ -211,7 +211,31 @@ error remains unresolved.
 - Areas use metres, not degrees.
 - Tests verify transform/CRS preservation and deterministic output.
 
-## Phase 7 — Change detection
+**Delivered modules**
+
+- `src/classification/predictor.py`
+- `src/analysis/area_statistics.py`
+- `tests/test_classification.py`
+- `tests/test_area_statistics.py`
+
+**Verified behaviour**
+
+- In-memory and raster-path classification use bounded windows, including
+  partial edge windows and window sizes smaller than the raster.
+- Saved models and trained models enforce feature names/order; NoData never
+  overlaps a class code; invalid feature pixels become NoData.
+- Output GeoTIFFs are `uint8`, preserve CRS/transform/width/height, contain only
+  model classes or NoData, and carry a class legend tag, palette, description,
+  and class counts.
+- Classification is deterministic across window sizes and save/load cycles.
+- Projected area statistics use transform determinant and CRS linear-unit
+  conversion; geographic statistics use WGS84 geodesic cell areas.
+- Percentages exclude NoData, unknown class codes fail explicitly, and CSV
+  values match the in-memory statistics.
+- Missing CRS, rotated geographic grids, non-integer bands, invalid band/window
+  arguments, and unsupported output suffixes fail with actionable errors.
+
+## Phase 7 — Change detection (next)
 
 **Tasks**
 
@@ -348,5 +372,22 @@ error remains unresolved.
   metrics, model checksum, and software versions
 - Verified rejection of unsupported suffixes, missing/corrupt files, metadata
   format mismatches, non-Random-Forest estimators, and feature/class mismatches
+- Ruff: all checks passed
+- `compileall`: OK
+
+### Phase 6
+
+- 255 total tests passed (17 new Phase 6 tests)
+- Overall coverage: 93% statement/branch coverage
+- Synthetic feature stacks cover four classes, invalid pixels, partial windows,
+  and both in-memory and saved-feature-raster classification
+- Verified class maps match expected synthetic classes, remain identical across
+  window sizes, and preserve CRS, transform, width, height, `uint8` dtype, and
+  NoData `0`
+- Verified loaded-model classification reproduces in-memory predictions and that
+  feature order, NoData, and class-code contracts are enforced
+- Verified GeoTIFF legend tags, palette, and per-class pixel counts
+- Verified projected areas from 10 m pixels, geographic geodesic cell areas,
+  percentages excluding NoData, unknown-code rejection, and CSV serialisation
 - Ruff: all checks passed
 - `compileall`: OK
