@@ -75,13 +75,20 @@ All outputs preserve CRS, transform, width, height, and NoData semantics.
 
 ### Layer 3 — Machine learning (`src/training/`, `src/classification/`)
 
-- `sample_generator.py` — align WorldCover labels with features.
-- `dataset_split.py` — spatially separated train/validation blocks.
-- `random_forest.py` — configured Random Forest classifier.
+- `sample_generator.py` — **implemented Phase 4.** Aligns WorldCover labels to
+  the exact feature grid with nearest resampling, excludes NoData/unknown
+  classes and invalid features, retains spatial coordinates, and records class
+  distributions, ignored-pixel counts, missing classes, and inverse-frequency
+  sample weights.
+- `dataset_split.py` — **implemented Phase 4.** Assigns whole spatial blocks to
+  train or validation with a seeded shuffle and writes a JSON manifest with
+  block IDs, configuration, class distributions, and disjointness checks.
+- `random_forest.py` — configured Random Forest classifier (Phase 5).
 - `evaluation.py` — overall accuracy, precision, recall, F1, per-class metrics,
-  confusion matrix, feature importance.
-- `model_manager.py` — save/load model plus reproducibility metadata.
-- `predictor.py` — windowed/chunked prediction writing a georeferenced raster.
+  confusion matrix, feature importance (Phase 5).
+- `model_manager.py` — save/load model plus reproducibility metadata (Phase 5).
+- `predictor.py` — windowed/chunked prediction writing a georeferenced raster
+  (Phase 6).
 
 ### Layer 4 — Analysis (`src/analysis/`)
 
@@ -202,6 +209,27 @@ AOI upload
 - B02/B03/B04/B08 are required; B11/B12 are optional. Duplicate aliases for the
   same band are rejected rather than silently overwritten.
 
+### Phase 4 label and split rules
+
+- Label rasters are aligned to the feature stack's CRS, transform, width, and
+  height. Only nearest-neighbour resampling is exposed for categorical labels.
+- Label `0`, non-finite aligned values, and codes outside the 11 ESA
+  WorldCover classes are excluded from samples. Unknown-code and NoData counts
+  are retained for auditability rather than silently discarded.
+- A sample is valid only when every feature is finite and the label is valid;
+  `X` never contains `NaN` and `y` never contains an unknown code.
+- Class counts, percentages, missing classes, and the max/min imbalance ratio
+  are derived from the retained samples. `balanced_sample_weights()` assigns
+  equal total weight per present class.
+- Splitting is done on spatial blocks, not individual pixels: every sample in a
+  block goes to exactly one side. This removes pixel overlap and reduces
+  fine-grained spatial leakage, but adjacent blocks can still be nearby.
+- The block size, validation fraction, seed, train/validation block IDs,
+  per-split class distributions, and `pixel_disjoint` flag are recorded in a
+  JSON manifest for reproducibility.
+- WorldCover remains a reference label source with label noise and temporal
+  mismatch risks; split manifests do not turn it into ground truth.
+
 ## 5. Key decisions and trade-offs
 
 | Decision | Rationale |
@@ -213,6 +241,9 @@ AOI upload
 | Read-only class registry | Prevents accidental mutation across dashboard reruns |
 | Reference-band-derived target grid | One explicit alignment choice instead of silently mixing resolutions |
 | `float32` + `NaN` for features | Preserves masked semantics and matches scikit-learn expectations |
+| Nearest-only label resampling | Prevents invalid class codes from interpolation |
+| Block-based spatial split | Prevents pixel leakage without expensive geometry buffering |
+| Balanced sample weights + class distribution metadata | Makes imbalance explicit and reproducible |
 | Synthetic test fixtures | Tests run quickly without downloading large datasets |
 | No data or results in Git | Large artefacts and fabricated results are explicitly avoided |
 
@@ -238,6 +269,9 @@ AOI upload
   projected reprojection, masked-NoData propagation, multispectral stacks,
   zero-denominator index masking, NDBI availability rules, feature ordering,
   sample-matrix validity, statistics, and index visualisations.
+- Phase 4 covers WorldCover label alignment, NoData/unknown-class exclusion,
+  class distributions and imbalance metadata, balanced sample weights, block-
+  based disjoint splits, reproducibility, and JSON manifest serialisation.
 - Later phases extend the same fixture approach to training, prediction, area
   statistics, and change detection.
 - Git ignores data, models, logs, and generated outputs.

@@ -108,7 +108,7 @@ error remains unresolved.
 - The feature stack exposes only finite valid pixels to modelling and rejects
   missing core bands or duplicate aliases.
 
-## Phase 4 — Training dataset preparation (next)
+## Phase 4 — Training dataset preparation (complete)
 
 **Tasks**
 
@@ -125,7 +125,30 @@ error remains unresolved.
 - Class distribution and split metadata are recorded.
 - Tests verify alignment, masking, and split disjointness.
 
-## Phase 5 — Machine-learning development
+**Delivered modules**
+
+- `src/training/sample_generator.py`
+- `src/training/dataset_split.py`
+- `tests/test_sample_generator.py`
+- `tests/test_dataset_split.py`
+- Synthetic WorldCover fixtures in `tests/fixtures.py`
+
+**Verified behaviour**
+
+- WorldCover labels align to the exact feature grid with nearest resampling;
+  coarse 20 m labels resample correctly to a 10 m feature grid.
+- Label NoData, non-finite aligned values, unknown codes, and pixels with any
+  invalid feature are excluded and counted.
+- Retained samples always have a valid WorldCover code and a fully finite
+  feature vector.
+- Class counts, percentages, missing classes, and imbalance ratio are derived
+  from retained samples; inverse-frequency weights equalise total class weight.
+- Whole spatial blocks are assigned to one side, so train and validation have
+  no overlapping pixels.
+- Split configuration, block IDs, class distributions, and disjointness are
+  serialised to a reproducible JSON manifest.
+
+## Phase 5 — Machine-learning development (next)
 
 **Tasks**
 
@@ -259,5 +282,23 @@ error remains unresolved.
   become infinities
 - Verified exported aligned rasters and feature stacks preserve CRS, transform,
   dimensions, `float32` dtype, band descriptions, and `NaN` NoData
+- Ruff: all checks passed
+- `compileall`: OK
+
+### Phase 4
+
+- 201 total tests passed (16 new Phase 4 tests)
+- Overall coverage: 94% statement/branch coverage
+- Synthetic WorldCover fixtures cover four classes, same-grid and 20 m → 10 m
+  label alignment, explicit NoData/unknown codes, and feature/label mask
+  intersections
+- Verified retained samples contain only valid ESA WorldCover codes and finite
+  feature vectors
+- Verified class distributions, percentages, missing classes, imbalance ratio,
+  and balanced sample weights
+- Verified block-based train/validation splits are pixel-disjoint, deterministic
+  under the same seed, and cover every sample exactly once
+- Verified JSON manifests record split configuration, block IDs, class
+  distributions, and the disjointness check
 - Ruff: all checks passed
 - `compileall`: OK

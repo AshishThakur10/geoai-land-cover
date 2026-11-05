@@ -5,13 +5,15 @@ Level-2A land cover and comparing classifications from different dates. The
 initial reference labels come from ESA WorldCover 2021 and the initial model is
 a Random Forest classifier.
 
-> **Status: Phase 3 (spectral feature extraction) complete.** The repository
+> **Status: Phase 4 (training dataset preparation) complete.** The repository
 > provides environment setup, configuration, logging, raster/vector loading with
 > metadata and CRS handling, geometry validation/repair, reprojection, AOI
 > clipping with NoData preservation, raster previews, band alignment and
-> resampling, multispectral stacking, NDVI/NDWI/optional NDBI, and a model-ready
-> feature stack. Model training, classification, change detection, and the full
-> dashboard are implemented in later phases.
+> resampling, multispectral stacking, NDVI/NDWI/optional NDBI, a model-ready
+> feature stack, WorldCover label alignment, audited valid-pixel sampling,
+> class-distribution reporting, balanced sample weights, and spatially separated
+> train/validation blocks with JSON manifests. Model training, classification,
+> change detection, and the full dashboard are implemented in later phases.
 
 ## Objectives
 
@@ -50,7 +52,7 @@ geoai-land-cover/
 │   ├── data/                  # Raster/vector loading, metadata, CRS validation
 │   ├── preprocessing/         # AOI clipping, band alignment, image stacking
 │   ├── features/              # Spectral indices and model feature extraction
-│   ├── training/              # Sampling, splitting, RF training (Phase 4–5)
+│   ├── training/              # Label sampling, spatial splits, RF training
 │   ├── classification/        # Windowed prediction (Phase 6)
 │   ├── analysis/              # Area statistics and change detection (Phase 6–7)
 │   ├── visualization/         # Band/RGB and spectral-index previews
@@ -174,6 +176,37 @@ print(f"Valid pixels: {features.valid_pixel_count}/{features.total_pixel_count}"
 Add B11 (and optionally B12) to `band_paths` to include SWIR features and NDBI.
 The example intentionally omits them to show the 10 m core configuration.
 
+### Example labeled samples and spatial split (Phase 4)
+
+```python
+from src.training.dataset_split import save_split_manifest, split_labeled_samples
+from src.training.sample_generator import generate_labeled_samples
+
+# WorldCover labels are aligned to the exact feature grid with nearest resampling.
+samples = generate_labeled_samples(
+    features,
+    "data/raw/worldcover/ESA_WorldCover_10m_2021_v200.tif",
+)
+print(samples.to_dict())  # class distribution, ignored pixels, imbalance ratio
+
+split = split_labeled_samples(
+    samples,
+    block_size=10,          # whole 10x10-pixel blocks stay on one side
+    validation_fraction=0.2,
+    random_seed=42,
+)
+save_split_manifest(split, "data/processed/labels/split_manifest.json")
+
+print(split.train.X.shape, split.train.y.shape)
+print(split.validation.X.shape, split.validation.y.shape)
+print(f"Pixel-disjoint: {split.pixel_disjoint}")
+```
+
+Labels must overlap the feature extent and use ESA WorldCover class codes.
+NoData (`0`), non-finite aligned labels, unknown codes, and pixels with any
+invalid feature are excluded and counted. The split manifest records the block
+IDs, seed, fraction, sample counts, and per-class distributions.
+
 ## Data
 
 No satellite imagery, reference rasters, or trained models are committed to this
@@ -206,8 +239,8 @@ Unit tests use synthetic arrays and fixtures and do not require downloads.
 | 1 | Project setup, environment, configuration, logging, tests, docs | Complete |
 | 2 | GIS fundamentals: raster/vector loading, CRS, clipping, NoData | Complete |
 | 3 | Band alignment, multispectral stack, NDVI/NDWI/NDBI | Complete |
-| 4 | WorldCover label alignment and spatial sampling | Next |
-| 5 | Random Forest training and evaluation | Planned |
+| 4 | WorldCover label alignment and spatial sampling | Complete |
+| 5 | Random Forest training and evaluation | Next |
 | 6 | Windowed classification, GeoTIFF output, area statistics | Planned |
 | 7 | Change detection and transition matrices | Planned |
 | 8 | Interactive Streamlit dashboard and exports | Planned |

@@ -141,3 +141,59 @@ def write_synthetic_shapefile(
     frame = gpd.GeoDataFrame({"name": ["synthetic-aoi"]}, geometry=[polygon], crs=RASTER_CRS)
     frame.to_file(path, driver="ESRI Shapefile")
     return path
+
+
+def synthetic_worldcover_codes(width: int = 40, height: int = 40) -> np.ndarray:
+    """Return a deterministic four-class WorldCover-code array.
+
+    The classes are synthetic, not a real land-cover observation.
+    """
+    codes = np.zeros((height, width), dtype=np.uint8)
+    mid_row = height // 2
+    mid_col = width // 2
+    codes[:mid_row, :mid_col] = 10
+    codes[:mid_row, mid_col:] = 40
+    codes[mid_row:, :mid_col] = 30
+    codes[mid_row:, mid_col:] = 80
+    return codes
+
+
+def write_synthetic_worldcover(
+    path: Path,
+    *,
+    codes: np.ndarray | None = None,
+    width: int = 40,
+    height: int = 40,
+    crs: str | None = RASTER_CRS,
+    transform: Affine | None = None,
+    nodata: float | None = 0,
+    dtype: str = "uint8",
+) -> Path:
+    """Write a synthetic single-band WorldCover-code GeoTIFF."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    labels = (
+        synthetic_worldcover_codes(width=width, height=height)
+        if codes is None
+        else np.asarray(codes)
+    )
+    if labels.shape != (height, width):
+        raise ValueError(
+            f"codes shape {labels.shape} does not match requested {height}x{width}"
+        )
+
+    with rasterio.open(
+        path,
+        "w",
+        driver="GTiff",
+        width=width,
+        height=height,
+        count=1,
+        dtype=dtype,
+        crs=crs,
+        transform=transform or default_transform(),
+        nodata=nodata,
+    ) as dataset:
+        dataset.write(labels.astype(dtype), 1)
+        dataset.set_band_description(1, "Synthetic WorldCover labels")
+
+    return path

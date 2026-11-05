@@ -2,13 +2,16 @@
 
 ## Current status
 
-Phase 3 (spectral feature extraction) is complete. The project can load
+Phase 4 (training dataset preparation) is complete. The project can load
 GeoTIFFs and GeoJSON/Shapefile boundaries, inspect metadata and CRS values,
 repair invalid geometries, reproject AOIs, clip rasters with preserved
 georeferencing and NoData, align and resample Sentinel-2 bands to a shared grid,
-build a multispectral stack, compute NDVI/NDWI/optional NDBI, and export a
-model-ready feature stack. Model training, classification, change detection,
-and the full dashboard are not implemented yet.
+build a multispectral stack, compute NDVI/NDWI/optional NDBI, export a
+model-ready feature stack, align ESA WorldCover labels, exclude and audit
+invalid pixels, report class distributions and balanced weights, and create
+spatially separated train/validation blocks with JSON manifests. Model
+training, classification, change detection, and the full dashboard are not
+implemented yet.
 
 ## 1. Requirements
 
@@ -187,6 +190,66 @@ Notes:
   from the reference band. To use a custom grid, build a `TargetGrid` from
   bounds and pass it to `align_raster_to_grid`.
 
+### Labels and spatial splits
+
+```python
+from src.training.dataset_split import save_split_manifest, split_labeled_samples
+from src.training.sample_generator import generate_labeled_samples
+
+# 1. Align WorldCover labels to the exact feature grid with nearest resampling.
+samples = generate_labeled_samples(
+    features,
+    "data/raw/worldcover/ESA_WorldCover_10m_2021_v200.tif",
+)
+
+print(samples.n_samples, samples.n_features)
+print(samples.class_counts)
+print(samples.class_distribution)
+print(samples.missing_classes)
+print(samples.imbalance_ratio)
+
+# 2. Optional inverse-frequency weights for estimators accepting sample_weight.
+weights = samples.balanced_sample_weights()
+
+# 3. Assign whole spatial blocks to train or validation.
+split = split_labeled_samples(
+    samples,
+    block_size=10,
+    validation_fraction=0.2,
+    random_seed=42,
+)
+print(split.train.X.shape, split.train.y.shape)
+print(split.validation.X.shape, split.validation.y.shape)
+print(split.pixel_disjoint)
+
+# 4. Record configuration and class distributions as JSON.
+save_split_manifest(split, "data/processed/labels/split_manifest.json")
+```
+
+Rules:
+
+- Label rasters are resampled with `nearest` only. Never use bilinear or cubic
+  interpolation for class codes.
+- A sample is kept only when every feature is finite, the label is finite, and
+  the code is one of the 11 ESA WorldCover classes.
+- Label `0`, missing/outside-coverage pixels, and unknown codes are excluded.
+  NoData and unknown-code counts are recorded in `samples.to_dict()`.
+- `class_counts` and `class_distribution` describe the retained samples;
+  `missing_classes` lists recognised classes with no samples.
+- `balanced_sample_weights()` gives each present class equal total weight and
+  sums to the number of samples. It complements the Random Forest
+  `class_weight` setting rather than replacing the spatial split.
+- Spatial splitting operates on blocks of pixels. Every sample in a block goes
+  to exactly one side, so no pixel appears in both train and validation.
+  Adjacent blocks can still be near each other; use larger blocks if a strict
+  buffer between splits is required.
+- The split seed, fraction, block size, block IDs, sample counts, and per-class
+  distributions are written to the manifest.
+
+WorldCover is a reference label source, not unquestioned ground truth. Label
+noise and class/temporal mismatch remain limitations of any metrics derived
+from it.
+
 ## 6. Testing and quality checks
 
 ```bash
@@ -250,7 +313,9 @@ Check the log output for Python tracebacks. Run:
 - No dashboard functionality beyond the Phase 1 landing page.
 - No AOI, imagery, or reference data bundled.
 - No trained models or classification results yet.
-- Alignment and stacking are in-memory; windowed processing is introduced with
-  classification in Phase 6.
+- Alignment, stacking, sampling, and splitting are in-memory; windowed
+  processing is introduced with classification in Phase 6.
 - Cloud masking is not implemented until SCL/QA input is explicitly supported.
+- Block splitting prevents pixel overlap but does not add a geographic buffer
+  between adjacent blocks.
 - Repository licence not yet selected.
