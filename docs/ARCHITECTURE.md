@@ -100,17 +100,20 @@ All outputs preserve CRS, transform, width, height, and NoData semantics.
 
 ### Layer 4 — Analysis (`src/analysis/`)
 
+- `area_utils.py` — shared NoData validation, pixel-validity masks, and
+  projected/geodesic area calculations.
 - `area_statistics.py` — **implemented Phase 6.** Windowed per-class pixel
   counts, percentages, projected or WGS84 geodesic areas, and CSV export.
-- `change_detection.py` — align two classifications and identify transitions
-  (Phase 7).
-- `transition_matrix.py` — class-to-class area matrix and summaries (Phase 7).
+- `change_detection.py` — **implemented Phase 7.** Validates or reprojects two
+  classifications onto the earlier grid, writes a windowed change raster, and
+  accumulates changed-area and transition statistics.
+- `transition_matrix.py` — **implemented Phase 7.** Class-to-class pixel/area
+  matrix, changed-transition summaries, scientific caveat, and CSV export.
 
 ### Layer 5 — Visualization (`src/visualization/`, `src/reports/`)
 
-- Phase 2: raster band/RGB previews and PNG export.
-- Later: spectral-index maps, classification legends, charts, Folium maps,
-  CSV/report generation.
+- Phases 2–3: raster band/RGB previews, spectral-index maps, and PNG export.
+- Phase 8: classification legends, charts, Folium maps, and report generation.
 
 ### Layer 6 — UI (`dashboard/`, `app.py`)
 
@@ -180,7 +183,8 @@ AOI upload
   -> model + reproducibility metadata persistence
   -> model reload and windowed classification -> georeferenced GeoTIFF
   -> per-class pixel counts/areas -> statistics CSV
-  -> change detection -> dashboard/exports
+  -> aligned change raster + transition matrix + changed-area summary
+  -> dashboard/exports
 ```
 
 ### Phase 2 geospatial rules
@@ -297,6 +301,29 @@ AOI upload
 - Percentages use valid classified pixels as the denominator; NoData is excluded.
   CSV output uses the same counts/areas as the in-memory result.
 
+### Phase 7 change-detection rules
+
+- Both inputs must be single-band integer classification rasters with a CRS and
+  recognised class codes. NoData values cannot overlap valid class codes.
+- `alignment="strict"` requires identical CRS, transform, width, and height.
+  `alignment="reproject"` warps the later classification onto the earlier grid
+  with nearest-neighbour resampling; categorical classes are never interpolated.
+- Reprojection uses a lazy `WarpedVRT`, so later-raster windows are read and
+  warped on demand. Strict comparisons read matching windows directly.
+- Only pixels valid in both classifications participate. A pixel is changed when
+  the earlier and later class codes differ. Invalid pixels become change NoData.
+- Change rasters are `uint8`: `0` unchanged, `1` changed, `255` NoData. They
+  preserve the earlier CRS, transform, width, and height and carry a change
+  description, legend tag, palette, alignment mode, and scientific caveat.
+- The transition matrix includes the sorted union of classes observed in either
+  valid classification. Rows are earlier classes, columns are later classes;
+  diagonal cells are unchanged pixels and off-diagonal cells are transitions.
+- Transition areas apply the same projected or WGS84 geodesic calculations as
+  Phase 6. Percentages use both-valid pixels as the denominator; changed
+  percentages use changed pixels.
+- All generated summaries include the explicit caveat that map differences are
+  not proof of real-world land-cover change.
+
 ## 5. Key decisions and trade-offs
 
 | Decision | Rationale |
@@ -317,13 +344,16 @@ AOI upload
 | Windowed classification reads/writes | Bounds memory use for large imagery |
 | `uint8` class raster with NoData `0` | Compact, directly usable in GIS with an explicit invalid value |
 | Geodesic fallback for geographic rasters | Reports meaningful areas without treating degrees as metres |
+| Strict alignment by default, explicit nearest reprojection | Prevents silently warping categorical maps while still supporting mismatched grids |
+| Change raster values `0`/`1`/`255` | Unambiguous unchanged, changed, and invalid states |
+| Full class union for transition matrices | Represents classes that appear or disappear between dates |
 | Synthetic test fixtures | Tests run quickly without downloading large datasets |
 | No data or results in Git | Large artefacts and fabricated results are explicitly avoided |
 
 ## 6. Non-functional requirements mapping
 
-- **Performance:** windowed feature reading, classification, and statistics;
-  cached settings.
+- **Performance:** windowed feature reading, classification, statistics, and
+  aligned change detection; cached settings.
 - **Reliability:** validation helpers, typed errors, rotating logs.
 - **Code quality:** modular packages, type hints, Ruff, focused tests.
 - **Reproducibility:** fixed seed in settings; model metadata in Phase 5;
@@ -356,5 +386,8 @@ AOI upload
   preservation, legend tags and palette, projected pixel-area calculations,
   geographic geodesic areas, unknown-code rejection, CSV export, and invalid
   area-input failures.
-- Later phases extend the same fixture approach to change detection.
+- Phase 7 covers known transition matrices and areas, window-size independence,
+  strict-grid rejection, nearest reprojection onto the earlier grid, geographic
+  geodesic transition areas, change-raster values and metadata, CSV export,
+  invalid inputs, NoData exclusion, and the scientific caveat.
 - Git ignores data, models, logs, and generated outputs.

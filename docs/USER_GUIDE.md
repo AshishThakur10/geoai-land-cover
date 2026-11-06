@@ -2,7 +2,7 @@
 
 ## Current status
 
-Phase 6 (land-cover classification) is complete. The project can load
+Phase 7 (change detection) is complete. The project can load
 GeoTIFFs and GeoJSON/Shapefile boundaries, inspect metadata and CRS values,
 repair invalid geometries, reproject AOIs, clip rasters with preserved
 georeferencing and NoData, align and resample Sentinel-2 bands to a shared grid,
@@ -12,9 +12,11 @@ invalid pixels, report class distributions and balanced weights, create
 spatially separated train/validation blocks with JSON manifests, train a
 configurable Random Forest, evaluate it on held-out samples, inspect feature
 importance, save/load the model with reproducibility metadata, classify feature
-rasters in windows, write georeferenced land-cover GeoTIFFs with legends, and
-calculate projected or geodesic class areas with CSV export. Change detection
-and the full dashboard are not implemented yet.
+rasters in windows, write georeferenced land-cover GeoTIFFs with legends,
+calculate projected or geodesic class areas with CSV export, compare two
+classifications, write a georeferenced change raster, build class-to-class
+transition matrices with areas, and export transition tables. The full dashboard
+is not implemented yet.
 
 ## 1. Requirements
 
@@ -377,6 +379,60 @@ Rules:
   totals describe the map produced by the model, not confirmed real-world land
   cover.
 
+### Change detection and transition matrices
+
+```python
+from src.analysis.change_detection import detect_changes
+from src.analysis.transition_matrix import save_transition_matrix_csv
+
+result = detect_changes(
+    "data/outputs/classifications/land_cover_2021.tif",
+    "data/outputs/classifications/land_cover_2024.tif",
+    "data/outputs/change/land_cover_change.tif",
+    alignment="strict",
+    window_size=1024,
+)
+
+print(result.changed_pixels)
+print(result.changed_percentage)
+print(result.changed_area_km2)
+for item in result.matrix.changed_transitions:
+    print(
+        item.from_name,
+        "->",
+        item.to_name,
+        item.pixel_count,
+        item.area_km2,
+    )
+
+save_transition_matrix_csv(
+    result.matrix,
+    "data/outputs/change/transition_matrix.csv",
+)
+```
+
+Rules:
+
+- `alignment="strict"` is the default and requires both classifications to have
+  the same CRS, transform, width, and height. Use `alignment="reproject"` to
+  warp the later classification onto the earlier grid with nearest-neighbour
+  resampling. Categorical class codes are never interpolated.
+- Only pixels valid in both rasters are compared. If either raster is NoData,
+  the change raster is NoData. Changed means the earlier and later class codes
+  differ.
+- Change-raster values are `0` unchanged, `1` changed, and `255` NoData. The
+  earlier raster's CRS, transform, width, and height are preserved.
+- Transition-matrix rows are earlier classes and columns are later classes.
+  Diagonal cells are unchanged area; off-diagonal cells are transitions. The
+  matrix uses the sorted union of classes observed in either classification.
+- Transition areas use projected pixel dimensions or WGS84 geodesic cells, never
+  raw degrees.
+- `result.to_dict()` and `result.matrix.to_dict()` include the scientific caveat.
+  The change GeoTIFF also stores it in the `SCIENTIFIC_CAVEAT` tag.
+- Differences between classifications are not proof of real-world change. For a
+  defensible comparison, use consistent preprocessing, compatible observation
+  periods, the same class definitions, and preferably the same trained model.
+
 ## 6. Testing and quality checks
 
 ```bash
@@ -439,6 +495,11 @@ Check the log output for Python tracebacks. Run:
 
 - No dashboard functionality beyond the Phase 1 landing page.
 - No AOI, imagery, or reference data bundled.
+- Change detection compares classified maps, not raw imagery. Seasonal,
+  atmospheric, acquisition, preprocessing, model, and classification differences
+  can appear as change.
+- Reprojection uses nearest-neighbour resampling; changing grids can still alter
+  the effective pixel support and should be documented in comparisons.
 - No pre-trained models or classification results are bundled. Models and
   classification outputs you create are local artifacts and are ignored by Git.
 - Alignment, stacking, sampling, splitting, training, evaluation, and feature

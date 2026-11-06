@@ -235,7 +235,7 @@ error remains unresolved.
 - Missing CRS, rotated geographic grids, non-integer bands, invalid band/window
   arguments, and unsupported output suffixes fail with actionable errors.
 
-## Phase 7 — Change detection (next)
+## Phase 7 — Change detection (complete)
 
 **Tasks**
 
@@ -252,7 +252,33 @@ error remains unresolved.
 - Reports include the scientific caveat that differences are not proof of
   real-world change.
 
-## Phase 8 — Interactive dashboard
+**Delivered modules**
+
+- `src/analysis/change_detection.py`
+- `src/analysis/transition_matrix.py`
+- `src/analysis/area_utils.py` (shared area/NoData logic extracted from Phase 6)
+- `tests/test_change_detection.py`
+
+**Verified behaviour**
+
+- Known synthetic transitions produce exact pixel counts and transition areas,
+  with unchanged cells on the diagonal and changed cells off-diagonal.
+- `alignment="strict"` rejects CRS, transform, and dimension mismatches with an
+  actionable reproject hint; `alignment="reproject"` warps the later raster onto
+  the earlier grid with nearest-neighbour resampling.
+- Change rasters use `uint8` values `0` unchanged, `1` changed, and `255`
+  NoData, preserve the earlier grid, and include description, legend, palette,
+  alignment, and caveat metadata.
+- Only both-valid pixels are analysed; changed pixels and changed area are
+  counted against both-valid and changed denominators respectively.
+- Transition matrices contain the sorted union of observed classes, projected
+  or WGS84 geodesic areas, and complete CSV export.
+- Window sizes do not change pixel counts, areas, or output values.
+- Invalid alignment modes, band indices, dtypes, class codes, NoData overrides,
+  output suffixes, missing CRS, and rasters with no overlap fail clearly.
+- All result and matrix dictionaries include the scientific change caveat.
+
+## Phase 8 — Interactive dashboard (next)
 
 **Tasks**
 
@@ -389,5 +415,25 @@ error remains unresolved.
 - Verified GeoTIFF legend tags, palette, and per-class pixel counts
 - Verified projected areas from 10 m pixels, geographic geodesic cell areas,
   percentages excluding NoData, unknown-code rejection, and CSV serialisation
+- Ruff: all checks passed
+- `compileall`: OK
+
+### Phase 7
+
+- 264 total tests passed (9 new Phase 7 tests)
+- Overall coverage: 93% statement/branch coverage
+- Change detection: 97% coverage; transition matrix: 96% coverage
+- Known synthetic transitions produce exact pixel counts, matrix cells, changed
+  area, and changed percentage
+- Verified change-raster CRS, transform, dimensions, `uint8` values, NoData,
+  description, legend, palette, and scientific-caveat tags
+- Verified window-size-independent counts, areas, and output values
+- Verified strict-grid rejection, nearest-neighbour reprojection onto the
+  earlier grid, and source-NoData propagation through warping
+- Verified WGS84 geodesic transition areas for geographic rasters
+- Verified complete transition CSV export and explicit caveat in result/matrix
+  dictionaries
+- Verified rejection of unsupported alignment/output/band/dtype/class/NoData
+  inputs and classifications with no both-valid pixels
 - Ruff: all checks passed
 - `compileall`: OK

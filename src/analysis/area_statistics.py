@@ -3,22 +3,21 @@
 from __future__ import annotations
 
 import csv
-import math
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 from affine import Affine
-from pyproj import Geod
 from rasterio.crs import CRS
 from rasterio.windows import Window
 
-from config.land_cover_classes import (
-    get_class_color,
-    get_class_name,
-    is_valid_class_code,
+from config.land_cover_classes import get_class_color, get_class_name, is_valid_class_code
+from src.analysis.area_utils import (
+    AreaPlan,
+    resolve_area_plan,
+    valid_values,
+    validate_class_nodata,
 )
-from src.data.data_metadata import RasterMetadata
 from src.data.raster_loader import ensure_georeferenced, open_raster, read_metadata
 from src.utils.errors import DataValidationError, RasterError
 from src.utils.file_utils import ensure_directory
@@ -27,7 +26,6 @@ from src.utils.logging_config import get_logger
 logger = get_logger(__name__)
 
 SUPPORTED_CSV_SUFFIXES: frozenset[str] = frozenset({".csv"})
-WGS84_GEOD = Geod(ellps="WGS84")
 
 
 @dataclass(frozen=True)
@@ -99,93 +97,6 @@ def _positive_integer(value: object, name: str) -> int:
     return value
 
 
-def _normalise_nodata(value: object) -> int | float | None:
-    if value is None:
-        return None
-    if isinstance(value, bool):
-        raise DataValidationError(f"nodata must be numeric, got {value!r}")
-    if isinstance(value, (int, np.integer)):
-        return int(value)
-    if isinstance(value, (float, np.floating)):
-        numeric = float(value)
-        if math.isnan(numeric):
-            return numeric
-        if not math.isfinite(numeric):
-            raise DataValidationError(f"nodata must be finite, got {value!r}")
-        return int(numeric) if numeric.is_integer() else numeric
-    raise DataValidationError(f"nodata must be numeric, got {value!r}")
-
-
-def _projected_pixel_area_km2(crs: CRS, transform: Affine) -> float:
-    try:
-        factor = float(crs.linear_units_factor[1])
-    except (AttributeError, IndexError, TypeError, ValueError) as exc:
-        raise DataValidationError(f"Unable to determine CRS linear units: {crs}") from exc
-    if not math.isfinite(factor) or factor <= 0:
-        raise DataValidationError(f"Invalid linear unit conversion factor for CRS {crs}")
-    determinant = abs(transform.a * transform.e - transform.b * transform.d)
-    pixel_area_m2 = determinant * factor * factor
-    if not math.isfinite(pixel_area_m2) or pixel_area_m2 <= 0:
-        raise DataValidationError("Raster transform does not define a positive pixel area")
-    return pixel_area_m2 / 1_000_000.0
-
-
-def _geodesic_row_area_km2(transform: Affine, row: int, width: int) -> float:
-    half_width = abs(transform.a) / 2.0
-    half_height = abs(transform.e) / 2.0
-    center_x = transform.c + (width / 2.0) * transform.a
-    center_y = transform.f + (row + 0.5) * transform.e
-    lons = (
-        center_x - half_width,
-        center_x + half_width,
-        center_x + half_width,
-        center_x - half_width,
-    )
-    lats = (
-        center_y - half_height,
-        center_y - half_height,
-        center_y + half_height,
-        center_y + half_height,
-    )
-    area, _ = WGS84_GEOD.polygon_area_perimeter(lons, lats)
-    return abs(area) / 1_000_000.0
-
-
-def _area_plan(
-    metadata: RasterMetadata,
-    *,
-    width: int,
-    height: int,
-) -> tuple[str, float | None]:
-    crs = metadata.crs
-    transform = metadata.transform
-    if crs is None:
-        raise RasterError("Classification raster has no CRS")
-    if crs.is_projected:
-        return "projected", _projected_pixel_area_km2(crs, transform)
-    if crs.is_geographic:
-        if not np.isclose(transform.b, 0.0) or not np.isclose(transform.d, 0.0):
-            raise DataValidationError(
-                "Rotated geographic grids are not supported for area statistics; "
-                "reproject to a projected CRS"
-            )
-        if width <= 0 or height <= 0:
-            raise DataValidationError("Classification raster dimensions must be positive")
-        return "geodesic", None
-    raise DataValidationError(
-        f"Unsupported CRS for area statistics: {crs.to_string()}; "
-        "use a projected or geographic CRS"
-    )
-
-
-def _valid_values(values: np.ndarray, nodata: int | float | None) -> np.ndarray:
-    if nodata is None:
-        return np.ones(values.shape, dtype=bool)
-    if isinstance(nodata, float) and math.isnan(nodata):
-        return np.isfinite(values)
-    return values != nodata
-
-
 def compute_area_statistics(
     classification_path: str | Path,
     *,
@@ -216,24 +127,17 @@ def compute_area_statistics(
 
     crs = metadata.crs
     assert crs is not None
-    area_method, pixel_area_km2 = _area_plan(
-        metadata,
-        width=metadata.width,
-        height=metadata.height,
-    )
+    plan: AreaPlan = resolve_area_plan(metadata)
+    area_method = plan.area_method
+    pixel_area_km2 = plan.pixel_area_km2
     counts: dict[int, int] = {}
     areas: dict[int, float] = {}
     unknown: dict[int, int] = {}
 
     with open_raster(classification_path) as source:
-        resolved_nodata = _normalise_nodata(source.nodata if nodata is None else nodata)
-        if (
-            isinstance(resolved_nodata, int)
-            and is_valid_class_code(resolved_nodata)
-        ):
-            raise DataValidationError(
-                f"NoData value {resolved_nodata} overlaps a land-cover class code"
-            )
+        resolved_nodata = validate_class_nodata(
+            source.nodata if nodata is None else nodata
+        )
 
         for row_off in range(0, metadata.height, size):
             for col_off in range(0, metadata.width, size):
@@ -241,14 +145,14 @@ def compute_area_statistics(
                 width = min(size, metadata.width - col_off)
                 window = Window(col_off, row_off, width, height)
                 values = source.read(band, window=window)
-                valid = _valid_values(values, resolved_nodata)
+                valid = valid_values(values, resolved_nodata)
 
                 if area_method == "geodesic":
                     for local_row in range(height):
                         row_values = values[local_row][valid[local_row]]
                         if row_values.size == 0:
                             continue
-                        row_area = _geodesic_row_area_km2(
+                        row_area = plan.row_pixel_area_km2(
                             metadata.transform,
                             row_off + local_row,
                             metadata.width,

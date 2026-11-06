@@ -5,7 +5,7 @@ Level-2A land cover and comparing classifications from different dates. The
 initial reference labels come from ESA WorldCover 2021 and the initial model is
 a Random Forest classifier.
 
-> **Status: Phase 6 (land-cover classification) complete.** The repository
+> **Status: Phase 7 (change detection) complete.** The repository
 > provides environment setup, configuration, logging, raster/vector loading with
 > metadata and CRS handling, geometry validation/repair, reprojection, AOI
 > clipping with NoData preservation, raster previews, band alignment and
@@ -15,8 +15,9 @@ a Random Forest classifier.
 > train/validation blocks with JSON manifests, configurable Random Forest
 > training, held-out evaluation, feature importance, model persistence with
 > reproducibility metadata, windowed classification to georeferenced GeoTIFF,
-> class legends, and projected/geodesic area statistics with CSV export. Change
-> detection and the full dashboard are implemented in later phases.
+> class legends, projected/geodesic area statistics with CSV export, aligned
+> change maps, class-to-class transition matrices with areas, and changed-area
+> summaries. The full dashboard is implemented in a later phase.
 
 ## Objectives
 
@@ -57,7 +58,7 @@ geoai-land-cover/
 │   ├── features/              # Spectral indices and model feature extraction
 │   ├── training/              # Sampling, splits, RF training/evaluation, models
 │   ├── classification/        # Windowed prediction and classification rasters
-│   ├── analysis/              # Area statistics; change detection follows
+│   ├── analysis/              # Area statistics, change detection, transitions
 │   ├── visualization/         # Band/RGB and spectral-index previews
 │   ├── reports/               # Report generation (Phase 8)
 │   └── utils/                 # Errors, logging, file and validation helpers
@@ -283,6 +284,39 @@ latitude degrees are never treated as metres.
 Classification maps are model outputs, not verified ground truth. Internal
 validation metrics and area totals do not establish real-world accuracy.
 
+### Example change detection and transition export (Phase 7)
+
+```python
+from src.analysis.change_detection import detect_changes
+from src.analysis.transition_matrix import save_transition_matrix_csv
+
+result = detect_changes(
+    "data/outputs/classifications/land_cover_2021.tif",
+    "data/outputs/classifications/land_cover_2024.tif",
+    "data/outputs/change/land_cover_change.tif",
+    alignment="strict",
+    window_size=1024,
+)
+print(result.to_dict())
+
+save_transition_matrix_csv(
+    result.matrix,
+    "data/outputs/change/transition_matrix.csv",
+)
+```
+
+The change raster uses `0` for unchanged, `1` for changed, and `255` for NoData
+where either classification is invalid. It preserves the earlier raster's CRS,
+transform, width, and height. With `alignment="reproject"`, the later raster is
+warped onto the earlier grid using nearest-neighbour resampling; the default
+`strict` mode rejects mismatched grids. Transition areas use the same projected
+or WGS84 geodesic rules as area statistics.
+
+A difference between classifications does not prove real-world land-cover
+change. It may reflect seasonality, clouds, acquisition differences,
+classification errors, or different models, preprocessing, or class
+definitions.
+
 ## Data
 
 No satellite imagery, reference rasters, or trained models are committed to this
@@ -319,8 +353,8 @@ Unit tests use synthetic arrays and fixtures and do not require downloads.
 | 4 | WorldCover label alignment and spatial sampling | Complete |
 | 5 | Random Forest training, evaluation, model persistence | Complete |
 | 6 | Windowed classification, GeoTIFF output, area statistics | Complete |
-| 7 | Change detection and transition matrices | Next |
-| 8 | Interactive Streamlit dashboard and exports | Planned |
+| 7 | Change detection and transition matrices | Complete |
+| 8 | Interactive Streamlit dashboard and exports | Next |
 | 9 | Expanded testing, documentation, screenshots | Planned |
 
 See [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) for acceptance
