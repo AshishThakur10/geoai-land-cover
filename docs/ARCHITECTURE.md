@@ -110,14 +110,36 @@ All outputs preserve CRS, transform, width, height, and NoData semantics.
 - `transition_matrix.py` — **implemented Phase 7.** Class-to-class pixel/area
   matrix, changed-transition summaries, scientific caveat, and CSV export.
 
-### Layer 5 — Visualization (`src/visualization/`, `src/reports/`)
+### Layer 5 — Visualization and reports (`src/visualization/`, `src/reports/`)
 
-- Phases 2–3: raster band/RGB previews, spectral-index maps, and PNG export.
-- Phase 8: classification legends, charts, Folium maps, and report generation.
+- `raster_visualizer.py` — raster band/RGB previews and PNG export.
+- `index_visualizer.py` — fixed-scale spectral-index maps and previews.
+- `map_visualizer.py` — **implemented Phase 8.** Folium maps for classified
+  rasters, continuous bands, change maps, and AOI boundaries. Rasters are
+  downsampled only for display and preserve their geographic bounds.
+- `charts.py` — **implemented Phase 8.** Plotly class distributions, transition
+  heatmaps, confusion matrices, and feature importance.
+- `report_generator.py` — **implemented Phase 8.** JSON/Markdown analysis
+  reports plus confusion-matrix and per-class CSV serialisation. Callers supply
+  only real selected/computed sections.
 
 ### Layer 6 — UI (`dashboard/`, `app.py`)
 
-- Streamlit landing page in Phase 1; multi-section dashboard in Phase 8.
+- **Implemented Phase 8.** `app.py` provides sidebar navigation across Home,
+  Study Area, Satellite Imagery, Spectral Analysis, Classification, Model
+  Evaluation, Change Detection, and Exports, and renders each section through
+  an error boundary. The sidebar shows the active AOI and configured paths.
+- `dashboard/data_access.py` owns file discovery, safe upload persistence,
+  zipped-vector validation, JSON report/model metadata reads, raster tags, and
+  display previews.
+- `dashboard/common.py` owns session-state keys/helpers, cached loaders, file
+  selectors, record tables, byte serialisation for downloads, and user-facing
+  error rendering.
+- `dashboard/sections/` contains one module per dashboard section. The
+  dashboard orchestrates existing pipeline functions; it does not duplicate
+  classification, area, or change algorithms.
+- No dashboard page fabricates data. Empty states tell the user which real input
+  or analysis is required.
 
 ## 3. Cross-cutting design
 
@@ -324,6 +346,37 @@ AOI upload
 - All generated summaries include the explicit caveat that map differences are
   not proof of real-world land-cover change.
 
+### Phase 8 dashboard rules
+
+- Dashboard inputs are discovered from configured project directories; uploaded
+  files are stored under `data/uploads/` with generated names and random
+  suffixes, never the caller-supplied name.
+- Upload suffix and size checks run before persistence. JSON uploads are limited
+  to 20 MB and raster/vector uploads to `GEOAI_MAX_UPLOAD_MB`.
+- Zipped Shapefiles must contain exactly one supported vector layer. Absolute
+  paths, parent traversal, symbolic links, and expansion beyond the upload limit
+  are rejected before extraction.
+- Raster acquisition dates are shown only when derived from actual raster tags.
+  A missing tag is reported as unrecorded, not inferred from filenames.
+- Spectral results are keyed by source path and complete band mapping. Changing
+  either hides the old result until the user recomputes; indices always go
+  through `compute_spectral_indices`.
+- Classification maps, tables, and charts use the existing area-statistics
+  object. CSV exports serialise that same object, so files cannot drift from
+  displayed values.
+- Change Detection calls the Phase 7 `detect_changes` API and stores the returned
+  result in session state; Exports reads the same result for its GeoTIFF and
+  transition CSV.
+- Export downloads preserve rasters byte-for-byte. The active AOI is converted to
+  WGS84 GeoJSON so all geometries are contained in one downloadable file rather
+  than an incomplete Shapefile sidecar set.
+- Analysis reports include only sections with available selected or computed
+  data. Missing sections are omitted, not filled with placeholder results.
+- Maps are display-only downsamples. They are not used for area statistics,
+  transition counts, or any numeric export.
+- Scientific caveats appear with classification and change views and in report
+  content; model outputs are never presented as field-verified observations.
+
 ## 5. Key decisions and trade-offs
 
 | Decision | Rationale |
@@ -347,6 +400,11 @@ AOI upload
 | Strict alignment by default, explicit nearest reprojection | Prevents silently warping categorical maps while still supporting mismatched grids |
 | Change raster values `0`/`1`/`255` | Unambiguous unchanged, changed, and invalid states |
 | Full class union for transition matrices | Represents classes that appear or disappear between dates |
+| Dashboard reuses pipeline objects | Prevents display/export algorithms from drifting apart |
+| Generated upload names + ZIP safety checks | Untrusted filenames, traversal, links, and expansion cannot escape storage |
+| Session-scoped analysis context | Keeps visible maps, tables, and exports tied to the same real inputs |
+| Display-only raster downsampling | Keeps Folium responsive without affecting numerical results |
+| WGS84 GeoJSON AOI export | Ensures one complete, interoperable geometry download |
 | Synthetic test fixtures | Tests run quickly without downloading large datasets |
 | No data or results in Git | Large artefacts and fabricated results are explicitly avoided |
 
@@ -358,7 +416,9 @@ AOI upload
 - **Code quality:** modular packages, type hints, Ruff, focused tests.
 - **Reproducibility:** fixed seed in settings; model metadata in Phase 5;
   environment and dependency declarations in `pyproject.toml`.
-- **Security:** `.env` ignored, upload suffix/size checks, no secrets in source.
+- **Security:** `.env` ignored; upload suffix/size checks; generated storage
+  names; zipped-vector traversal, symlink, layer-count, and expansion checks; no
+  secrets in source. Joblib files are never loaded by the dashboard.
 
 ## 7. Testing strategy
 
@@ -390,4 +450,10 @@ AOI upload
   strict-grid rejection, nearest reprojection onto the earlier grid, geographic
   geodesic transition areas, change-raster values and metadata, CSV export,
   invalid inputs, NoData exclusion, and the scientific caveat.
+- Phase 8 covers file discovery and ordering, upload limits and generated names,
+  zipped-vector traversal/symlink/expansion/single-layer rejection, raster
+  metadata/tags/previews, JSON report/model reads, Folium map construction,
+  chart/report serialisation, and AppTest navigation through study-area
+  activation, imagery, spectral indices, evaluation, change detection, and
+  exports with synthetic project data.
 - Git ignores data, models, logs, and generated outputs.

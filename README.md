@@ -5,7 +5,7 @@ Level-2A land cover and comparing classifications from different dates. The
 initial reference labels come from ESA WorldCover 2021 and the initial model is
 a Random Forest classifier.
 
-> **Status: Phase 7 (change detection) complete.** The repository
+> **Status: Phase 8 (interactive dashboard) complete.** The repository
 > provides environment setup, configuration, logging, raster/vector loading with
 > metadata and CRS handling, geometry validation/repair, reprojection, AOI
 > clipping with NoData preservation, raster previews, band alignment and
@@ -16,8 +16,9 @@ a Random Forest classifier.
 > training, held-out evaluation, feature importance, model persistence with
 > reproducibility metadata, windowed classification to georeferenced GeoTIFF,
 > class legends, projected/geodesic area statistics with CSV export, aligned
-> change maps, class-to-class transition matrices with areas, and changed-area
-> summaries. The full dashboard is implemented in a later phase.
+> change maps, class-to-class transition matrices with areas, changed-area
+> summaries, and an eight-section Streamlit dashboard with maps, charts, uploads,
+> GeoTIFF/CSV/GeoJSON downloads, and analysis reports.
 
 ## Objectives
 
@@ -44,13 +45,17 @@ a Random Forest classifier.
 
 ```text
 geoai-land-cover/
-├── app.py                     # Streamlit entry point (Phase 1 placeholder)
+├── app.py                     # Streamlit entry point and section navigation
 ├── config/
 │   ├── settings.py            # Environment-driven application settings
 │   ├── land_cover_classes.py  # ESA WorldCover class registry
 │   └── sentinel2_bands.py     # Sentinel-2 band metadata and alias resolution
 ├── data/                      # Local data and artefacts (not committed)
-├── dashboard/                 # Dashboard pages (Phase 8)
+├── dashboard/
+│   ├── common.py              # Session state, cached loaders, UI helpers
+│   ├── data_access.py         # Discovery, uploads, raster/JSON metadata
+│   └── sections/              # Home, AOI, imagery, spectral, classification,
+│                              # evaluation, change, and exports pages
 ├── docs/                      # Requirements, architecture, data, user guide
 ├── src/
 │   ├── data/                  # Raster/vector loading, metadata, CRS validation
@@ -59,8 +64,8 @@ geoai-land-cover/
 │   ├── training/              # Sampling, splits, RF training/evaluation, models
 │   ├── classification/        # Windowed prediction and classification rasters
 │   ├── analysis/              # Area statistics, change detection, transitions
-│   ├── visualization/         # Band/RGB and spectral-index previews
-│   ├── reports/               # Report generation (Phase 8)
+│   ├── visualization/         # Previews, dashboard charts, and Folium maps
+│   ├── reports/               # Analysis report and table serialisation
 │   └── utils/                 # Errors, logging, file and validation helpers
 └── tests/                     # Unit tests (synthetic fixtures only)
 ```
@@ -112,12 +117,47 @@ make run       # streamlit run app.py
 
 ```bash
 .venv/bin/python -m pytest -q
+.venv/bin/python -m pytest --cov=src --cov=config --cov=dashboard --cov-report=term-missing
 .venv/bin/python -m ruff check .
-.venv/bin/python -m compileall -q src config tests app.py
+.venv/bin/python -m compileall -q src config dashboard tests app.py
 .venv/bin/python -m streamlit run app.py
 ```
 
 The app serves at <http://localhost:8501> by default.
+
+## Interactive dashboard
+
+Start Streamlit and open <http://localhost:8501>. The dashboard has eight
+sections:
+
+- **Home** — inventory of imagery, classifications, change outputs, study
+  areas, model metadata, and evaluation reports.
+- **Study Area** — select or upload a GeoJSON/GeoPackage/zipped Shapefile,
+  inspect features, area, CRS, and activate the boundary used by later sections.
+- **Satellite Imagery** — inspect raster dimensions, CRS, pixel size, band
+  descriptions, acquisition tags, and downsampled previews.
+- **Spectral Analysis** — choose a band mapping, compute NDVI/NDWI and optional
+  NDBI, and inspect index maps and distributions.
+- **Classification** — open an existing or uploaded class raster, view its map,
+  class distribution, area statistics, and model metadata.
+- **Model Evaluation** — inspect held-out metrics, confusion matrix, per-class
+  metrics, and feature importance from an evaluation JSON report.
+- **Change Detection** — compare two classifications, run strict or reprojected
+  change detection, and inspect changed area and the transition matrix.
+- **Exports** — download the active AOI as WGS84 GeoJSON, classified/change
+  GeoTIFFs, area/transition/evaluation CSVs, and a JSON or Markdown analysis
+  report that includes only sections backed by real selected or computed data.
+
+Uploads are size- and suffix-checked, stored under `data/uploads/`, and zipped
+Shapefiles are extracted only after path traversal, symbolic-link, and
+uncompressed-size checks. The dashboard does not train models or load joblib
+files. It runs spectral indices and change detection through the same pipeline
+code as the Python API; exported statistics are generated from those same
+objects.
+
+No dashboard section fabricates imagery or metrics. Model predictions, area
+statistics, and change maps are derived products, not field-verified
+observations. See the scientific limitations below.
 
 ### Example GIS pipeline (Phase 2)
 
@@ -354,8 +394,8 @@ Unit tests use synthetic arrays and fixtures and do not require downloads.
 | 5 | Random Forest training, evaluation, model persistence | Complete |
 | 6 | Windowed classification, GeoTIFF output, area statistics | Complete |
 | 7 | Change detection and transition matrices | Complete |
-| 8 | Interactive Streamlit dashboard and exports | Next |
-| 9 | Expanded testing, documentation, screenshots | Planned |
+| 8 | Interactive Streamlit dashboard and exports | Complete |
+| 9 | Expanded testing, documentation, screenshots, real-data examples | Next |
 
 See [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) for acceptance
 criteria per phase.

@@ -278,7 +278,7 @@ error remains unresolved.
   output suffixes, missing CRS, and rasters with no overlap fail clearly.
 - All result and matrix dictionaries include the scientific change caveat.
 
-## Phase 8 — Interactive dashboard (next)
+## Phase 8 — Interactive dashboard (complete)
 
 **Tasks**
 
@@ -296,7 +296,53 @@ error remains unresolved.
 - Invalid uploads show actionable messages.
 - Exported files preserve georeferencing and match on-screen statistics.
 
-## Phase 9 — Testing and documentation
+**Delivered modules**
+
+- `app.py`
+- `dashboard/common.py`
+- `dashboard/data_access.py`
+- `dashboard/sections/` (all eight sections)
+- `src/visualization/map_visualizer.py`
+- `src/visualization/charts.py`
+- `src/reports/report_generator.py`
+- `tests/test_dashboard_data_access.py`
+- `tests/test_map_visualizer.py`
+- `tests/test_charts_reports.py`
+- `tests/test_dashboard_app.py`
+
+**Verified behaviour**
+
+- All eight sections load without errors with both empty and populated
+  synthetic project directories.
+- Dashboard file discovery covers imagery, classifications, change outputs,
+  study areas, model metadata, and evaluation reports; newer files sort first.
+- Upload suffix, empty-payload, and configured-size limits are enforced before
+  storage; stored names are generated rather than caller-controlled.
+- Zipped vector uploads reject absolute paths, parent traversal, symbolic links,
+  expansion beyond the upload limit, and archives without exactly one supported
+  vector layer.
+- Study-area activation exposes feature count, approximate WGS84 geodesic area,
+  CRS, and geometry types; clearing it removes the active context.
+- Raster views report dimensions, band count, pixel size, CRS, band
+  descriptions, and acquisition dates only when present in raster tags.
+- Spectral indices are computed through the Phase 3 pipeline and are not
+  displayed against a changed source or band mapping until recomputed.
+- Classification maps use the class legend and palette; area tables and charts
+  use the same `AreaStatistics` object as CSV exports.
+- Evaluation views validate report structure and render metrics, confusion
+  matrix, per-class metrics, and feature importance from the JSON report.
+- Change detection uses the Phase 7 API, including strict/reproject alignment,
+  and displays changed area, changed share, transition heatmap, and full matrix.
+- Exports provide WGS84 GeoJSON for the active AOI, source GeoTIFFs, CSV tables,
+  and JSON/Markdown analysis reports. Reports include only available real
+  sections and carry scientific caveats.
+- AppTest covers navigation, empty-state handling, study-area activation,
+  imagery, spectral computation, evaluation, change detection, and export
+  controls.
+- Invalid uploads and pipeline/display failures produce actionable UI errors
+  instead of tracebacks.
+
+## Phase 9 — Final testing, documentation, and release readiness (next)
 
 **Tasks**
 
@@ -317,9 +363,9 @@ error remains unresolved.
 
 ```bash
 .venv/bin/python -m pytest -q
-.venv/bin/python -m pytest --cov=src --cov=config --cov-report=term-missing
+.venv/bin/python -m pytest --cov=src --cov=config --cov=dashboard --cov-report=term-missing
 .venv/bin/python -m ruff check .
-.venv/bin/python -m compileall -q src config tests app.py
+.venv/bin/python -m compileall -q src config dashboard tests app.py
 .venv/bin/python -m streamlit run app.py --server.headless true
 ```
 
@@ -435,5 +481,28 @@ error remains unresolved.
   dictionaries
 - Verified rejection of unsupported alignment/output/band/dtype/class/NoData
   inputs and classifications with no both-valid pixels
+- Ruff: all checks passed
+- `compileall`: OK
+
+### Phase 8
+
+- 290 total tests passed (26 new Phase 8 tests)
+- Overall coverage across `src`, `config`, and `dashboard`: 89%
+- Dashboard coverage: `data_access.py` 87%, `common.py` 83%, section modules
+  65–83%, map visualiser 87%, charts 89%, report generator 88%
+- AppTest verified navigation, empty and populated states, study-area
+  activation, imagery metadata, spectral computation, evaluation, change
+  detection, and export controls without exceptions
+- Verified upload size/suffix checks, generated storage names, zipped-vector
+  traversal/symlink/expansion/single-layer rejection, newest-first discovery,
+  raster tag/acquisition handling, and JSON report/model metadata reads
+- Verified Folium classification/continuous/change/boundary maps, Plotly chart
+  construction, CSV report serialisation, and JSON/Markdown analysis reports
+- Study-area exports serialise the active AOI as complete WGS84 GeoJSON; source
+  rasters are downloaded unchanged, and area/transition CSVs serialise the
+  displayed statistics objects
+- Confirmed spectral results are hidden after a source or band-mapping change
+  until recomputed
+- Streamlit headless health endpoint: `ok`
 - Ruff: all checks passed
 - `compileall`: OK

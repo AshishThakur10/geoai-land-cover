@@ -74,7 +74,7 @@ select = ["E", "F", "I", "UP", "B", "C4", "SIM"]
 known-first-party = ["src", "config", "dashboard"]
 
 [tool.coverage.run]
-source = ["src", "config"]
+source = ["src", "config", "dashboard"]
 branch = true
 
 [tool.coverage.report]

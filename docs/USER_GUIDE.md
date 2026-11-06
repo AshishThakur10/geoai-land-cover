@@ -2,21 +2,21 @@
 
 ## Current status
 
-Phase 7 (change detection) is complete. The project can load
-GeoTIFFs and GeoJSON/Shapefile boundaries, inspect metadata and CRS values,
-repair invalid geometries, reproject AOIs, clip rasters with preserved
-georeferencing and NoData, align and resample Sentinel-2 bands to a shared grid,
-build a multispectral stack, compute NDVI/NDWI/optional NDBI, export a
-model-ready feature stack, align ESA WorldCover labels, exclude and audit
-invalid pixels, report class distributions and balanced weights, create
-spatially separated train/validation blocks with JSON manifests, train a
-configurable Random Forest, evaluate it on held-out samples, inspect feature
-importance, save/load the model with reproducibility metadata, classify feature
-rasters in windows, write georeferenced land-cover GeoTIFFs with legends,
-calculate projected or geodesic class areas with CSV export, compare two
-classifications, write a georeferenced change raster, build class-to-class
-transition matrices with areas, and export transition tables. The full dashboard
-is not implemented yet.
+Phase 8 (interactive dashboard) is complete. The project can load GeoTIFFs and
+GeoJSON/Shapefile boundaries, inspect metadata and CRS values, repair invalid
+geometries, reproject AOIs, clip rasters with preserved georeferencing and
+NoData, align and resample Sentinel-2 bands to a shared grid, build a
+multispectral stack, compute NDVI/NDWI/optional NDBI, export a model-ready
+feature stack, align ESA WorldCover labels, exclude and audit invalid pixels,
+report class distributions and balanced weights, create spatially separated
+train/validation blocks with JSON manifests, train a configurable Random Forest,
+evaluate it on held-out samples, inspect feature importance, save/load the model
+with reproducibility metadata, classify feature rasters in windows, write
+georeferenced land-cover GeoTIFFs with legends, calculate projected or geodesic
+class areas with CSV export, compare two classifications, write a georeferenced
+change raster, build class-to-class transition matrices with areas, and explore
+all of these through an eight-section Streamlit dashboard with maps, charts,
+validated uploads, georeferenced downloads, and analysis reports.
 
 ## 1. Requirements
 
@@ -86,8 +86,47 @@ source .venv/bin/activate
 streamlit run app.py
 ```
 
-Open <http://localhost:8501>. The Phase 1 page shows project status, configured
-paths, and the ESA WorldCover class legend.
+Open <http://localhost:8501>. Prepare data under the configured directories
+first, or add files through the dashboard upload tabs. The sidebar shows the
+active study area and project paths.
+
+### Dashboard workflow
+
+1. **Study Area** — select an existing vector or upload GeoJSON, GeoPackage, or
+   a ZIP containing one Shapefile (`.shp`, `.shx`, `.dbf`, and `.prj`). Activate
+   the validated boundary.
+2. **Satellite Imagery** — select or upload a GeoTIFF. The section reports
+   dimensions, pixel size, CRS, band descriptions, and acquisition date when the
+   raster tags contain one; otherwise it says the date is not recorded.
+3. **Spectral Analysis** — confirm the band mapping (green, red, NIR, and
+   optional SWIR1 for NDBI), then compute indices. Selecting a different source
+   or band mapping requires recomputing before results are shown.
+4. **Classification** — select or upload a classified GeoTIFF, review the map,
+   class distribution table/chart, area statistics, and optional model metadata.
+5. **Model Evaluation** — select or upload an evaluation JSON report to view
+   held-out metrics, confusion matrix, per-class metrics, and feature importance.
+6. **Change Detection** — choose two different classifications, strict or
+   reprojected alignment, and a window size. Review the earlier, later, and
+   change maps plus the transition matrix.
+7. **Exports** — download the active AOI as WGS84 GeoJSON, classification and
+   change GeoTIFFs, area/transition/evaluation CSVs, and an analysis report in
+   JSON or Markdown. The report includes only sections with real selected or
+   computed data.
+
+Limits and behaviour:
+
+- Uploads are checked against `GEOAI_MAX_UPLOAD_MB` before storage. Files are
+  saved under `data/uploads/` with generated names, not the supplied filename.
+- ZIP archives are rejected if they contain absolute paths, `..` traversal,
+  symbolic links, excessive uncompressed size, or anything other than exactly
+  one supported vector layer.
+- Existing files are discovered under the configured imagery, classification,
+  change, AOI, model, and evaluation directories; some sections also list
+  compatible files in `data/uploads/`.
+- The dashboard does not execute model training. Classification evaluation JSON
+  and metadata are read as trusted local project artefacts.
+- Changing the active study area does not clip or reproject existing products
+  automatically.
 
 ## 5. Using the geospatial and spectral pipeline
 
@@ -446,7 +485,7 @@ Equivalent direct commands:
 ```bash
 .venv/bin/python -m pytest -q
 .venv/bin/python -m ruff check .
-.venv/bin/python -m compileall -q src config tests app.py
+.venv/bin/python -m compileall -q src config dashboard tests app.py
 ```
 
 Unit tests use synthetic data only; no downloads are required.
@@ -493,8 +532,10 @@ Check the log output for Python tracebacks. Run:
 
 ## 9. Known limitations
 
-- No dashboard functionality beyond the Phase 1 landing page.
 - No AOI, imagery, or reference data bundled.
+- The dashboard reviews existing pipeline products and can run spectral indices
+  and change detection; it does not train models, align full imagery stacks, or
+  clip data to the active study area.
 - Change detection compares classified maps, not raw imagery. Seasonal,
   atmospheric, acquisition, preprocessing, model, and classification differences
   can appear as change.

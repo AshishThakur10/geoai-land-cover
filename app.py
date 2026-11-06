@@ -1,16 +1,24 @@
-"""Streamlit entry point.
-
-Phase 1 intentionally exposes only project setup information. Data loading,
-preprocessing, model training, classification, change detection, and the full
-dashboard are added in later phases.
-"""
+"""Streamlit dashboard entry point for the GeoAI land-cover workflow."""
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import streamlit as st
 
-from config.land_cover_classes import ESA_WORLDCOVER_CLASSES, get_class_legend
-from config.settings import get_settings
+import src
+from config.settings import Settings, get_settings
+from dashboard.common import active_aoi_path, relative_label, safe_render
+from dashboard.sections import (
+    change_detection,
+    classification,
+    exports,
+    home,
+    imagery,
+    model_evaluation,
+    spectral,
+    study_area,
+)
 from src.utils.logging_config import get_logger, setup_logging
 
 settings = get_settings()
@@ -20,38 +28,52 @@ logger = get_logger(__name__)
 
 st.set_page_config(
     page_title="GeoAI Land Cover",
+    page_icon=None,
     layout="wide",
 )
 
-st.title("GeoAI Land Cover Classification and Change Detection")
-st.caption("Sentinel-2 Level-2A imagery · ESA WorldCover 2021 reference labels · Random Forest")
+RENDERERS: dict[str, Callable[[Settings], None]] = {
+    "Home": home.render,
+    "Study Area": study_area.render,
+    "Satellite Imagery": imagery.render,
+    "Spectral Analysis": spectral.render,
+    "Classification": classification.render,
+    "Model Evaluation": model_evaluation.render,
+    "Change Detection": change_detection.render,
+    "Exports": exports.render,
+}
 
-st.info(
-    "Phase 1 (project setup) is complete. Data loading, spectral analysis, "
-    "model training, classification, change detection, and the full dashboard "
-    "are implemented in subsequent phases."
-)
+with st.sidebar:
+    st.title("GeoAI Land Cover")
+    st.caption("Sentinel-2 · ESA WorldCover reference labels · Random Forest")
+    section = st.radio(
+        "Navigation",
+        options=list(RENDERERS),
+        key="dashboard-section",
+    )
+    st.divider()
+    active = active_aoi_path(settings)
+    st.caption(
+        "Active study area: "
+        + (
+            f"`{relative_label(active, settings)}`"
+            if active is not None
+            else "none selected"
+        )
+    )
+    with st.expander("Project paths", expanded=False):
+        st.write(f"Package version: `{src.__version__}`")
+        st.write(f"Data: `{settings.data_dir}`")
+        st.write(f"Outputs: `{settings.outputs_dir}`")
+        st.write(f"Models: `{settings.models_dir}`")
+        st.write(f"Upload limit: `{settings.max_upload_mb} MB`")
 
-left, right = st.columns(2)
-with left:
-    st.subheader("Project status")
-    st.write(f"Python package version: `{__import__('src').__version__}`")
-    st.write(f"Log level: `{settings.log_level}`")
-    st.write(f"Data directory: `{settings.data_dir}`")
-    st.write(f"Output directory: `{settings.outputs_dir}`")
-    st.write(f"Random seed: `{settings.random_seed}`")
-    st.write(f"Random Forest trees: `{settings.n_estimators}`")
-
-with right:
-    st.subheader("Reference classes")
-    st.write(f"{len(ESA_WORLDCOVER_CLASSES)} ESA WorldCover 2021 classes configured.")
-    st.dataframe(get_class_legend(), use_container_width=True, hide_index=True)
+safe_render(f"{section} section", lambda: RENDERERS[section](settings))
 
 st.divider()
 st.caption(
-    "Reference labels are derived from ESA WorldCover 2021 and are not treated as "
-    "unquestioned ground truth. Classification accuracy must be validated before "
-    "results are used for decision-making."
+    "Classifications and change maps are model-derived products. WorldCover labels are "
+    "reference data, not unquestioned ground truth, and all results require validation "
+    "before operational use."
 )
-
-logger.info("Rendered Phase 1 landing page")
+logger.info("Rendered dashboard section: %s", section)

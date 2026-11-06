@@ -19,7 +19,7 @@ test:
 	$(PYTHON) -m pytest
 
 test-cov:
-	$(PYTHON) -m pytest --cov=src --cov=config --cov-report=term-missing
+	$(PYTHON) -m pytest --cov=src --cov=config --cov=dashboard --cov-report=term-missing
 
 lint:
 	$(PYTHON) -m ruff check .
