@@ -153,6 +153,21 @@ def test_classification_report_csv_matches_report() -> None:
         classification_report_csv({})
 
 
+def test_report_csv_rejects_malformed_metric_values() -> None:
+    report = _evaluation_report()
+    report["per_class"] = [{"code": 10}]
+    with pytest.raises(DataValidationError, match="require code, name"):
+        classification_report_csv(report)
+
+    malformed = _evaluation_report()
+    malformed["confusion_matrix"] = {
+        "labels": [10, 40],
+        "matrix": [["not-a-count", 1], [0, 3]],
+    }
+    with pytest.raises(DataValidationError, match="integer confusion-matrix"):
+        confusion_matrix_csv(malformed)
+
+
 def test_analysis_report_json_and_markdown_round_trip() -> None:
     report = build_analysis_report(
         study_area={"feature_count": 1, "area_km2": 1.25},

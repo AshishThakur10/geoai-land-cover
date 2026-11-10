@@ -93,8 +93,9 @@ active study area and project paths.
 ### Dashboard workflow
 
 1. **Study Area** — select an existing vector or upload GeoJSON, GeoPackage, or
-   a ZIP containing one Shapefile (`.shp`, `.shx`, `.dbf`, and `.prj`). Activate
-   the validated boundary.
+   a ZIP containing one Shapefile (`.shp`, `.shx`, `.dbf`, and `.prj`). Review
+   the feature count, approximate geodesic area, CRS, geometry types, and
+   source-CRS bounding box, then activate the validated boundary.
 2. **Satellite Imagery** — select or upload a GeoTIFF. The section reports
    dimensions, pixel size, CRS, band descriptions, and acquisition date when the
    raster tags contain one; otherwise it says the date is not recorded.

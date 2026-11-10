@@ -342,7 +342,7 @@ error remains unresolved.
 - Invalid uploads and pipeline/display failures produce actionable UI errors
   instead of tracebacks.
 
-## Phase 9 — Final testing, documentation, and release readiness (next)
+## Phase 9 — Final testing, documentation, and release readiness (in progress)
 
 **Tasks**
 
@@ -351,6 +351,27 @@ error remains unresolved.
 - Complete installation, data-acquisition, and usage documentation.
 - Add screenshots and example outputs from real data runs.
 - Final README polish and GitHub readiness check.
+
+**Progress**
+
+- Added `tests/test_end_to_end_pipeline.py`, which runs a synthetic project
+  through feature extraction, label sampling, spatial splitting, training,
+  evaluation, model persistence, classification, area statistics, change
+  detection, transition export, report generation, and dashboard discovery.
+- Added invalid-archive, symbolic-link, empty-archive, malformed evaluation
+  report, malformed model metadata, and malformed CSV-serialization tests.
+- Study Area now displays the source-CRS bounding box alongside feature count,
+  area, CRS, and geometry types.
+- Added `.github/workflows/ci.yml` to run Ruff and the test suite with coverage.
+- Updated stale AOI/data-acquisition wording and the bounding-box user guidance.
+
+**Remaining**
+
+- Add screenshots and example outputs from a real data run when openly licensed
+  data is available; do not fabricate these artefacts.
+- The repository remains intentionally unlicensed. Add an explicit licence
+  before redistribution or external contribution; do not describe it as
+  open-source until then.
 
 **Acceptance criteria**
 
@@ -506,3 +527,26 @@ error remains unresolved.
 - Streamlit headless health endpoint: `ok`
 - Ruff: all checks passed
 - `compileall`: OK
+
+### Phase 9 (in progress)
+
+- 294 total tests passed (4 new Phase 9 tests)
+- Overall coverage across `src`, `config`, and `dashboard`: 90%
+- `dashboard/data_access.py` 91%, report generator 89%, map visualiser 87%
+- End-to-end synthetic test covers feature extraction, WorldCover sampling,
+  spatially blocked splitting, Random Forest training/evaluation, model
+  persistence/reload, windowed classification, area statistics, change
+  detection, transition CSV export, analysis-report JSON, and dashboard output
+  discovery
+- Added rejection tests for invalid ZIP data, empty archives, symbolic links,
+  malformed evaluation reports, malformed model metadata, malformed per-class
+  metrics, and non-integer confusion-matrix values
+- Study Area displays the source-CRS bounding box; AppTest verifies it appears
+  alongside the existing AOI metadata
+- CI workflow YAML parsed successfully; it runs Ruff and pytest with coverage on
+  push/PR
+- Streamlit headless health endpoint: `ok`
+- Ruff: all checks passed
+- `compileall`: OK
+- No data, model, output, log, or obvious secret files are tracked; only
+  `.gitkeep` placeholders remain under data/log paths

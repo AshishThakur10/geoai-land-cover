@@ -37,13 +37,18 @@ def _rows(report: Mapping[str, object]) -> tuple[list[int], list[str], list[list
         raise DataValidationError("Evaluation report requires confusion-matrix labels")
     if not isinstance(class_names, list) or len(class_names) != len(labels):
         class_names = [str(label) for label in labels]
-    resolved_labels = [int(label) for label in labels]
-    names = [str(name) for name in class_names]
-    values: list[list[int]] = []
-    for row in matrix:
-        if not isinstance(row, list) or len(row) != len(resolved_labels):
-            raise DataValidationError("Confusion matrix row has the wrong length")
-        values.append([int(value) for value in row])
+    try:
+        resolved_labels = [int(label) for label in labels]
+        names = [str(name) for name in class_names]
+        values: list[list[int]] = []
+        for row in matrix:
+            if not isinstance(row, list) or len(row) != len(resolved_labels):
+                raise DataValidationError("Confusion matrix row has the wrong length")
+            values.append([int(value) for value in row])
+    except (TypeError, ValueError) as exc:
+        raise DataValidationError(
+            "Evaluation report requires integer confusion-matrix labels and counts"
+        ) from exc
     if len(values) != len(resolved_labels):
         raise DataValidationError("Confusion matrix has the wrong number of rows")
     return resolved_labels, names, values
@@ -81,8 +86,8 @@ def classification_report_csv(report: Mapping[str, object]) -> str:
     for item in per_class:
         if not isinstance(item, Mapping):
             raise DataValidationError("Per-class metrics must be mappings")
-        rows.append(
-            [
+        try:
+            row = [
                 int(item["code"]),
                 str(item["name"]),
                 f"{float(item['precision']):.6f}",
@@ -90,7 +95,11 @@ def classification_report_csv(report: Mapping[str, object]) -> str:
                 f"{float(item['f1']):.6f}",
                 int(item["support"]),
             ]
-        )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise DataValidationError(
+                "Per-class metrics require code, name, precision, recall, f1, and support"
+            ) from exc
+        rows.append(row)
     return _csv_text(rows)
 
 

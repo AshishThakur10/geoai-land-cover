@@ -68,8 +68,9 @@ Experiments must record acquisition dates and label provenance.
 
 ## 3. Area of Interest (AOI)
 
-Supported formats: GeoJSON and Shapefile (GeoPackage optional). Place files
-under `data/raw/aoi/` or upload them at runtime once the dashboard supports it.
+Supported formats: GeoJSON, GeoPackage, and Shapefile (upload a ZIP containing
+the Shapefile sidecar files). Place files under `data/raw/aoi/` or upload them
+through the dashboard Study Area section.
 
 Possible boundary sources include national/regional open-data portals,
 OpenStreetMap administrative boundaries (check the ODbL requirements), or a
@@ -77,7 +78,7 @@ hand-drawn polygon. Record the source, licence, and attribution for any AOI
 used in an experiment.
 
 Set `GEOAI_DEFAULT_AOI` in `.env` to an optional default boundary path. The
-path may be left empty; there is no bundled AOI in Phase 1.
+path may be left empty; no AOI is bundled with the repository.
 
 ## 4. Sample data
 

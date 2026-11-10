@@ -40,6 +40,12 @@ def _describe(path: str | Path, settings: Settings) -> dict[str, object]:
     columns[3].metric("Geometry types", len(metadata.geometry_types))
 
     st.write(f"**Source:** `{relative_label(resolved, settings)}`")
+    if metadata.bounds is not None:
+        west, south, east, north = metadata.bounds
+        st.caption(
+            "Bounding box (source CRS): "
+            f"west {west:.6f}, south {south:.6f}, east {east:.6f}, north {north:.6f}"
+        )
     st.dataframe(
         [
             {

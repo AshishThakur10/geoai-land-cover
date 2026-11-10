@@ -88,6 +88,7 @@ def test_dashboard_study_area_activation(monkeypatch, tmp_path: Path) -> None:
     app.sidebar.radio[0].set_value("Study Area").run()
     assert not app.exception
     assert app.title[0].value == "Study Area"
+    assert any("Bounding box" in caption.value for caption in app.caption)
 
     activate = next(
         button for button in app.button if button.label == "Use as active study area"

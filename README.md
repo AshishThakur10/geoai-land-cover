@@ -133,7 +133,8 @@ sections:
 - **Home** — inventory of imagery, classifications, change outputs, study
   areas, model metadata, and evaluation reports.
 - **Study Area** — select or upload a GeoJSON/GeoPackage/zipped Shapefile,
-  inspect features, area, CRS, and activate the boundary used by later sections.
+  inspect features, area, CRS, bounding box, and activate the boundary used by
+  later sections.
 - **Satellite Imagery** — inspect raster dimensions, CRS, pixel size, band
   descriptions, acquisition tags, and downsampled previews.
 - **Spectral Analysis** — choose a band mapping, compute NDVI/NDWI and optional
@@ -395,7 +396,7 @@ Unit tests use synthetic arrays and fixtures and do not require downloads.
 | 6 | Windowed classification, GeoTIFF output, area statistics | Complete |
 | 7 | Change detection and transition matrices | Complete |
 | 8 | Interactive Streamlit dashboard and exports | Complete |
-| 9 | Expanded testing, documentation, screenshots, real-data examples | Next |
+| 9 | Expanded testing, documentation, screenshots, real-data examples | In progress |
 
 See [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) for acceptance
 criteria per phase.
@@ -408,4 +409,6 @@ criteria per phase.
 
 ## License
 
-The repository licence has not been selected yet.
+No license has been selected for this repository. All rights are reserved by
+default; add an explicit license before redistributing or accepting external
+contributions.

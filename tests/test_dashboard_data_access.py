@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import stat
 import zipfile
 from pathlib import Path
 
@@ -115,6 +116,27 @@ def test_vector_zip_requires_one_layer(tmp_path: Path) -> None:
         data.prepare_vector_upload("multiple.zip", buffer.read_bytes(), settings)
 
 
+def test_vector_zip_rejects_invalid_empty_and_symlink_archives(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+
+    with pytest.raises(DataValidationError, match="Invalid ZIP archive"):
+        data.prepare_vector_upload("invalid.zip", b"not a zip", settings)
+
+    empty = tmp_path / "empty.zip"
+    with zipfile.ZipFile(empty, "w") as handle:
+        handle.writestr("notes.txt", "no vector here")
+    with pytest.raises(DataValidationError, match="no supported vector layer"):
+        data.prepare_vector_upload("empty.zip", empty.read_bytes(), settings)
+
+    symlink = tmp_path / "symlink.zip"
+    link = zipfile.ZipInfo("link.geojson")
+    link.external_attr = (stat.S_IFLNK | 0o777) << 16
+    with zipfile.ZipFile(symlink, "w") as handle:
+        handle.writestr(link, "target.geojson")
+    with pytest.raises(DataValidationError, match="symbolic link"):
+        data.prepare_vector_upload("symlink.zip", symlink.read_bytes(), settings)
+
+
 def test_discovery_matches_real_output_shapes(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
     classification = write_synthetic_worldcover(
@@ -146,6 +168,31 @@ def test_discovery_matches_real_output_shapes(tmp_path: Path) -> None:
         0.75
     )
     assert data.read_model_metadata(metadata_path)["feature_names"] == ["B02", "B03"]
+
+
+def test_json_report_readers_reject_missing_or_wrong_types(tmp_path: Path) -> None:
+    evaluation = tmp_path / "evaluation.json"
+    evaluation.write_text(json.dumps({"metrics": {}}), encoding="utf-8")
+    with pytest.raises(DataValidationError, match="missing required sections"):
+        data.read_evaluation_report(evaluation)
+
+    evaluation.write_text(
+        json.dumps(
+            {
+                "metrics": [],
+                "confusion_matrix": {},
+                "per_class": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(DataValidationError, match="metrics must be an object"):
+        data.read_evaluation_report(evaluation)
+
+    metadata = tmp_path / "metadata.json"
+    metadata.write_text(json.dumps({"format_version": 1}), encoding="utf-8")
+    with pytest.raises(DataValidationError, match="format_version and feature_names"):
+        data.read_model_metadata(metadata)
 
 
 def test_raster_summary_uses_actual_tags_only(tmp_path: Path) -> None:
